@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <link rel="stylesheet" href="styles.css?v=62">
+    <link rel="stylesheet" href="styles.css?v=63">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="PWA klavir">
@@ -170,19 +170,18 @@
         </div>
       </section>
 
-      <section id="repertoirePanel" class="repertoire-panel" aria-label="Repertoar">
+      <section id="repertoirePanel" class="repertoire-panel" aria-label="Playlist">
         <div class="repertoire-layout">
-          <section class="repertoire-sheet" aria-label="Lista pesama">
+          <section class="repertoire-sheet" aria-label="Playlist pesama">
             <div class="repertoire-topline">
-              <h2>Repertoar</h2>
+              <h2>Playlist</h2>
               <div class="repertoire-search" role="search">
                 <input id="songSearchInput" class="sheet-input search-input" type="search" autocomplete="off" placeholder="Pretraga pesme" aria-label="Pretraga pesme">
                 <button id="songSearchButton" class="text-button" type="button">Trazi</button>
               </div>
-              <div class="repertoire-file-controls" aria-label="Repertoar JSON fajl">
-                <button id="connectRepertoireFileButton" class="text-button" type="button">Povezi JSON</button>
-                <button id="exportRepertoireButton" class="text-button" type="button">Snimi JSON</button>
-                <input id="repertoireFileInput" type="file" accept=".json,application/json" hidden>
+              <div class="repertoire-file-controls playlist-controls" aria-label="Playlist JSON">
+                <button id="loadPlaylistButton" class="text-button" type="button">Load</button>
+                <button id="newPlaylistButton" class="text-button" type="button">New</button>
               </div>
               <output id="youtubeStatus" class="repertoire-status" aria-live="polite">Spreman</output>
             </div>
@@ -237,8 +236,19 @@
           </aside>
         </div>
       </section>
+
+      <div id="playlistDialog" class="playlist-dialog" hidden>
+        <button class="playlist-dialog-backdrop" type="button" data-playlist-close aria-label="Zatvori playlist browser"></button>
+        <section class="playlist-dialog-panel" role="dialog" aria-modal="true" aria-labelledby="playlistDialogTitle">
+          <div class="playlist-dialog-header">
+            <h2 id="playlistDialogTitle">Playlists</h2>
+            <button id="playlistDialogClose" class="mini-button" type="button" aria-label="Zatvori">X</button>
+          </div>
+          <div id="playlistBrowser" class="playlist-browser" role="list"></div>
+        </section>
+      </div>
     </main>
 
-    <script src="app.js?v=62" defer></script>
+    <script src="app.js?v=63" defer></script>
   </body>
 </html>

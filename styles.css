@@ -510,6 +510,104 @@ button {
   text-align: right;
 }
 
+.repertoire-file-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.playlist-controls .text-button {
+  min-width: 72px;
+}
+
+.playlist-dialog[hidden] {
+  display: none;
+}
+
+.playlist-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.playlist-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(10, 16, 14, 0.42);
+  cursor: default;
+}
+
+.playlist-dialog-panel {
+  position: relative;
+  width: min(460px, 100%);
+  max-height: min(520px, calc(100dvh - 32px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: 0 18px 50px rgba(23, 33, 29, 0.28);
+  overflow: hidden;
+}
+
+.playlist-dialog-header {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfb;
+}
+
+.playlist-dialog-header h2 {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.playlist-browser {
+  min-height: 160px;
+  overflow: auto;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.playlist-browser-item {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 0 10px;
+  text-align: left;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.playlist-browser-item:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.playlist-browser-state {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-weight: 800;
+  text-align: center;
+}
+
 .song-form {
   display: grid;
   grid-template-columns: minmax(160px, 1fr) minmax(96px, 130px) minmax(220px, 1.4fr) auto;

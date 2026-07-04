@@ -99,10 +99,12 @@
   const MAX_OCTAVE = 6;
   const LOWEST_MIDI = noteToMidi(7, 1);
   const HIGHEST_MIDI = noteToMidi(11, 7);
-  const REPERTOIRE_STORAGE_KEY = "pwa-klavir-repertoire-v1";
+  const REPERTOIRE_STORAGE_KEY = "pwa-klavir-active-playlist-v1";
   const PLAYER_SETTINGS_STORAGE_KEY = "pwa-klavir-player-settings-v1";
   const KEYBOARD_SETTINGS_STORAGE_KEY = "pwa-klavir-keyboard-settings-v1";
-  const REPERTOIRE_FILE_NAME = "repertoire.json";
+  const PLAYLISTS_API_URL = "https://api.github.com/repos/gulicmanojlo/FGR/contents/playlists?ref=main";
+  const PLAYLIST_BASE_PATH = "playlists/";
+  const PLAYLIST_FILE_EXTENSION = ".json";
   const DEFAULT_YOUTUBE_SEEK_SECONDS = 10;
   const YOUTUBE_API_SRC = "https://www.youtube.com/iframe_api";
   const YOUTUBE_PAUSE_GUARD_MS = 60000;
@@ -145,9 +147,11 @@
   const youtubeRewind = document.getElementById("youtubeRewind");
   const youtubeForward = document.getElementById("youtubeForward");
   const youtubeSeekSeconds = document.getElementById("youtubeSeekSeconds");
-  const connectRepertoireFileButton = document.getElementById("connectRepertoireFileButton");
-  const exportRepertoireButton = document.getElementById("exportRepertoireButton");
-  const repertoireFileInput = document.getElementById("repertoireFileInput");
+  const loadPlaylistButton = document.getElementById("loadPlaylistButton");
+  const newPlaylistButton = document.getElementById("newPlaylistButton");
+  const playlistDialog = document.getElementById("playlistDialog");
+  const playlistDialogClose = document.getElementById("playlistDialogClose");
+  const playlistBrowser = document.getElementById("playlistBrowser");
 
   const PIANO_SAMPLE_BASE_PATH = "samples/piano/";
   const PIANO_SAMPLE_DEFS = [
@@ -328,6 +332,10 @@
     keyElementsByMidi: new Map(),
     desktopMouseMode: "tone",
     repertoire: [],
+    activePlaylistName: "",
+    activePlaylistPath: "",
+    availablePlaylists: [],
+    playlistBrowserOpen: false,
     selectedSongId: null,
     youtubeSeekSeconds: DEFAULT_YOUTUBE_SEEK_SECONDS,
     youtubeApiPromise: null,
@@ -339,9 +347,7 @@
     youtubePauseGuardUntil: 0,
     youtubePauseRetryTimers: [],
     youtubeCommandToken: 0,
-    youtubeResumeTime: 0,
-    repertoireFileHandle: null,
-    repertoireFileSaveTimer: null
+    youtubeResumeTime: 0
   };
 
   init();
@@ -364,7 +370,6 @@
     } catch {
       state.audioContext = null;
     }
-    loadBundledRepertoireFile();
     focusAppSoon();
     registerServiceWorker();
   }
@@ -528,9 +533,14 @@
       focusFirstSearchResult();
     });
 
-    connectRepertoireFileButton.addEventListener("click", connectRepertoireFile);
-    exportRepertoireButton.addEventListener("click", saveOrExportRepertoireFile);
-    repertoireFileInput.addEventListener("change", handleRepertoireFileInputChange);
+    loadPlaylistButton.addEventListener("click", openPlaylistBrowser);
+    newPlaylistButton.addEventListener("click", createNewPlaylist);
+    playlistDialogClose.addEventListener("click", closePlaylistBrowser);
+    playlistDialog.addEventListener("click", (event) => {
+      if (event.target?.hasAttribute("data-playlist-close")) {
+        closePlaylistBrowser();
+      }
+    });
 
     youtubePlayPause.addEventListener("click", triggerSelectedSongToggle);
     youtubeRewind.addEventListener("click", () => seekYouTube(-getYouTubeSeekSeconds()));
@@ -544,10 +554,11 @@
   }
 
   function loadRepertoireState() {
-    const songs = readJsonStorage(REPERTOIRE_STORAGE_KEY, []);
-    state.repertoire = Array.isArray(songs)
-      ? songs.map(normalizeSong).filter((song) => song.url || song.videoId || song.title)
-      : [];
+    const playlist = readJsonStorage(REPERTOIRE_STORAGE_KEY, null);
+    const data = normalizeRepertoireFileData(playlist || { songs: [] });
+    state.activePlaylistName = String(playlist?.name || "");
+    state.activePlaylistPath = String(playlist?.path || "");
+    state.repertoire = data.songs;
 
     const settings = readJsonStorage(PLAYER_SETTINGS_STORAGE_KEY, {});
     state.youtubeSeekSeconds = clamp(Number(settings.seekSeconds) || DEFAULT_YOUTUBE_SEEK_SECONDS, 1, 60);
@@ -555,7 +566,9 @@
       youtubeSeekSeconds.value = String(state.youtubeSeekSeconds);
     }
 
-    const savedSongId = typeof settings.selectedSongId === "string" ? settings.selectedSongId : null;
+    const savedSongId = typeof data.selectedSongId === "string" && data.selectedSongId
+      ? data.selectedSongId
+      : typeof settings.selectedSongId === "string" ? settings.selectedSongId : null;
     state.selectedSongId = state.repertoire.some((song) => song.id === savedSongId)
       ? savedSongId
       : state.repertoire[0]?.id || null;
@@ -597,24 +610,114 @@
     }
   }
 
-  async function loadBundledRepertoireFile() {
-    if (window.location.protocol === "file:" || state.repertoire.length) {
+  async function openPlaylistBrowser() {
+    state.playlistBrowserOpen = true;
+    playlistDialog.hidden = false;
+    playlistBrowser.innerHTML = '<div class="playlist-browser-state">Ucitavanje...</div>';
+    setYouTubeStatus("Ucitavanje playlisti");
+
+    try {
+      state.availablePlaylists = await fetchServerPlaylists();
+      renderPlaylistBrowser();
+      setYouTubeStatus(state.availablePlaylists.length ? "Playlists ucitane" : "Nema playlisti");
+    } catch {
+      playlistBrowser.innerHTML = '<div class="playlist-browser-state">Playlists nisu dostupne</div>';
+      setYouTubeStatus("Playlists nisu dostupne");
+    }
+  }
+
+  function closePlaylistBrowser() {
+    state.playlistBrowserOpen = false;
+    playlistDialog.hidden = true;
+  }
+
+  async function fetchServerPlaylists() {
+    const response = await fetch(`${PLAYLISTS_API_URL}&cache=${Date.now()}`, {
+      headers: { Accept: "application/vnd.github+json" },
+      cache: "no-store"
+    });
+    if (response.status === 404) {
+      return [];
+    }
+    if (!response.ok) {
+      throw new Error("Playlists nisu dostupne");
+    }
+
+    const entries = await response.json();
+    return entries
+      .filter((entry) => entry.type === "file" && entry.name.endsWith(PLAYLIST_FILE_EXTENSION))
+      .map((entry) => ({
+        name: entry.name.slice(0, -PLAYLIST_FILE_EXTENSION.length),
+        path: entry.path,
+        url: entry.download_url
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "sr"));
+  }
+
+  function renderPlaylistBrowser() {
+    playlistBrowser.innerHTML = "";
+    if (!state.availablePlaylists.length) {
+      const empty = document.createElement("div");
+      empty.className = "playlist-browser-state";
+      empty.textContent = "Nema sacuvanih playlisti";
+      playlistBrowser.append(empty);
       return;
     }
 
+    state.availablePlaylists.forEach((playlist) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "playlist-browser-item";
+      button.textContent = playlist.name;
+      button.addEventListener("click", () => loadPlaylistFromServer(playlist));
+      playlistBrowser.append(button);
+    });
+  }
+
+  async function loadPlaylistFromServer(playlist) {
+    setYouTubeStatus("Ucitavanje playliste");
     try {
-      const response = await fetch(`${REPERTOIRE_FILE_NAME}?cache=${Date.now()}`, { cache: "no-store" });
+      const response = await fetch(`${playlist.url}?cache=${Date.now()}`, { cache: "no-store" });
       if (!response.ok) {
-        return;
+        throw new Error("Playlist nije ucitana");
       }
       const data = normalizeRepertoireFileData(await response.json());
-      if (!data.songs.length || state.repertoire.length) {
-        return;
-      }
-      applyRepertoireFileData(data, { skipFileSave: true, status: "JSON ucitan" });
+      applyRepertoireFileData(data, {
+        playlistName: data.name || playlist.name,
+        playlistPath: playlist.path,
+        skipFileSave: true,
+        status: `Playlist: ${data.name || playlist.name}`
+      });
+      closePlaylistBrowser();
     } catch {
-      // LocalStorage remains the fallback when the JSON file is not reachable.
+      setYouTubeStatus("Playlist nije ucitana");
     }
+  }
+
+  function createNewPlaylist() {
+    const name = window.prompt("Ime playliste");
+    const normalizedName = String(name || "").trim();
+    if (!normalizedName) {
+      return;
+    }
+
+    state.activePlaylistName = normalizedName;
+    state.activePlaylistPath = `${PLAYLIST_BASE_PATH}${slugifyPlaylistName(normalizedName)}${PLAYLIST_FILE_EXTENSION}`;
+    state.repertoire = [];
+    state.selectedSongId = null;
+    saveRepertoire({ skipFileSave: true });
+    renderRepertoire();
+    updateSelectedSongPanel();
+    setYouTubeStatus(`Nova playlist: ${normalizedName}`);
+  }
+
+  function slugifyPlaylistName(name) {
+    return String(name || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "playlist";
   }
 
   function normalizeSong(song) {
@@ -630,11 +733,12 @@
   }
 
   function saveRepertoire(options = {}) {
-    writeJsonStorage(REPERTOIRE_STORAGE_KEY, state.repertoire);
+    writeJsonStorage(REPERTOIRE_STORAGE_KEY, {
+      name: state.activePlaylistName,
+      path: state.activePlaylistPath,
+      ...buildRepertoireFileData()
+    });
     savePlayerSettings();
-    if (!options.skipFileSave) {
-      scheduleRepertoireFileSave();
-    }
   }
 
   function savePlayerSettings() {
@@ -651,6 +755,7 @@
   function buildRepertoireFileData() {
     return {
       version: 1,
+      name: state.activePlaylistName || "Playlist",
       updatedAt: new Date().toISOString(),
       settings: {
         selectedSongId: state.selectedSongId,
@@ -673,6 +778,8 @@
     const seekSeconds = Number(data?.settings?.seekSeconds || data?.seekSeconds || state.youtubeSeekSeconds);
 
     return {
+      name: String(data?.name || ""),
+      path: String(data?.path || ""),
       songs,
       selectedSongId,
       seekSeconds: clamp(seekSeconds || DEFAULT_YOUTUBE_SEEK_SECONDS, 1, 60)
@@ -680,6 +787,12 @@
   }
 
   function applyRepertoireFileData(data, options = {}) {
+    if (data.name || options.playlistName) {
+      state.activePlaylistName = String(options.playlistName || data.name);
+    }
+    if (data.path || options.playlistPath) {
+      state.activePlaylistPath = String(options.playlistPath || data.path);
+    }
     state.repertoire = options.merge
       ? mergeRepertoireSongs(state.repertoire, data.songs)
       : data.songs;
@@ -719,125 +832,6 @@
 
   function getSongIdentityKey(song) {
     return song.videoId || song.url || `${song.title}|${song.key}`.toLowerCase();
-  }
-
-  async function connectRepertoireFile() {
-    if (window.showOpenFilePicker) {
-      try {
-        const [handle] = await window.showOpenFilePicker({
-          multiple: false,
-          types: [
-            {
-              description: "Repertoar JSON",
-              accept: { "application/json": [".json"] }
-            }
-          ]
-        });
-        state.repertoireFileHandle = handle;
-        const data = await readRepertoireFileHandle(handle);
-        if (data) {
-          applyRepertoireFileData(data, {
-            merge: state.repertoire.length > 0,
-            skipFileSave: true,
-            status: "JSON povezan"
-          });
-        } else {
-          setYouTubeStatus("JSON povezan");
-        }
-        scheduleRepertoireFileSave(0);
-      } catch (error) {
-        if (error?.name !== "AbortError") {
-          setYouTubeStatus("JSON nije povezan");
-        }
-      }
-      return;
-    }
-
-    repertoireFileInput.value = "";
-    repertoireFileInput.click();
-  }
-
-  async function readRepertoireFileHandle(handle) {
-    const file = await handle.getFile();
-    const text = await file.text();
-    return parseRepertoireJsonText(text);
-  }
-
-  function parseRepertoireJsonText(text) {
-    const trimmed = String(text || "").trim();
-    if (!trimmed) {
-      return normalizeRepertoireFileData({ songs: [] });
-    }
-    return normalizeRepertoireFileData(JSON.parse(trimmed));
-  }
-
-  async function handleRepertoireFileInputChange(event) {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    try {
-      const data = parseRepertoireJsonText(await file.text());
-      applyRepertoireFileData(data, {
-        merge: state.repertoire.length > 0,
-        skipFileSave: true,
-        status: "JSON ucitan"
-      });
-    } catch {
-      setYouTubeStatus("JSON nije ucitan");
-    }
-  }
-
-  function saveOrExportRepertoireFile() {
-    if (state.repertoireFileHandle) {
-      saveRepertoireToConnectedFile();
-      return;
-    }
-    exportRepertoireFile();
-  }
-
-  function scheduleRepertoireFileSave(delay = 350) {
-    if (!state.repertoireFileHandle) {
-      return;
-    }
-    if (state.repertoireFileSaveTimer) {
-      window.clearTimeout(state.repertoireFileSaveTimer);
-    }
-    state.repertoireFileSaveTimer = window.setTimeout(() => {
-      state.repertoireFileSaveTimer = null;
-      saveRepertoireToConnectedFile();
-    }, delay);
-  }
-
-  async function saveRepertoireToConnectedFile() {
-    if (!state.repertoireFileHandle) {
-      return;
-    }
-
-    try {
-      const writable = await state.repertoireFileHandle.createWritable();
-      await writable.write(`${JSON.stringify(buildRepertoireFileData(), null, 2)}\n`);
-      await writable.close();
-      setYouTubeStatus("JSON sacuvan");
-    } catch {
-      setYouTubeStatus("JSON nije sacuvan");
-    }
-  }
-
-  function exportRepertoireFile() {
-    const blob = new Blob([`${JSON.stringify(buildRepertoireFileData(), null, 2)}\n`], {
-      type: "application/json"
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = REPERTOIRE_FILE_NAME;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setYouTubeStatus("JSON izvezen");
   }
 
   function addSongFromInputs() {
@@ -885,7 +879,7 @@
       const cell = document.createElement("td");
       cell.colSpan = 5;
       cell.className = "empty-sheet-cell";
-      cell.textContent = state.repertoire.length ? "Nema rezultata" : "Nema pesama";
+      cell.textContent = state.repertoire.length ? "Nema rezultata" : "Prazna playlist";
       row.append(cell);
       repertoireTableBody.append(row);
       updateSelectedSongPanel();
