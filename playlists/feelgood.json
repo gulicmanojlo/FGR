@@ -1,10 +1,18 @@
 {
   "version": 1,
   "name": "FeelGood",
-  "updatedAt": "2026-07-04T11:33:46.144Z",
+  "updatedAt": "2026-07-04T11:34:11.517Z",
   "settings": {
-    "selectedSongId": null,
+    "selectedSongId": "mr6ab8n4-vnn9o3",
     "seekSeconds": 1
   },
-  "songs": []
+  "songs": [
+    {
+      "id": "mr6ab8n4-vnn9o3",
+      "title": "Luis - A delismo sve na pola",
+      "key": "Amol",
+      "url": "https://youtu.be/7wIwbe-F9eY",
+      "videoId": "7wIwbe-F9eY"
+    }
+  ]
 }
