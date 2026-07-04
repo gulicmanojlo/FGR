@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="sr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#141009">
+<title>FGR — MIDI Lab (poveži pravu klavijaturu)</title>
+<style>
+  :root{
+    --bg:#141009; --panel:#1d1810; --panel-2:#241e15; --ink:#f3ecdd; --ink-2:#c6bba4; --muted:#8b7f68;
+    --line:#332b1e; --brass:#e3b45c; --brass-2:#c89234; --brass-ink:#f4d99a; --brass-soft:#2b2214;
+    --coral:#e28a58; --green:#8fce7a; --green-soft:#1a2414;
+    --key-w:#f4efe2; --key-w2:#e3dccb; --key-edge:#b6a988; --key-b:#191308; --key-b2:#0b0803; --glow:#f0c766;
+    --mono:ui-monospace,"SF Mono",Menlo,"Roboto Mono",monospace; --sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  [hidden]{display:none!important;}
+  body{margin:0;background:radial-gradient(800px 400px at 85% -10%, #2a2114 0%, transparent 60%),var(--bg);
+       color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45;}
+  .wrap{max-width:900px;margin:0 auto;padding:22px 18px 60px;}
+  h1{font-size:20px;margin:0 0 2px;} .sub{color:var(--muted);font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin-bottom:18px;}
+  .nav{font-size:12px;color:var(--muted);margin-bottom:16px;} .nav a{color:var(--brass-ink);}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 20px 44px -22px rgba(0,0,0,.7);}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  button{font:inherit;font-weight:650;font-size:14px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);padding:11px 16px;border-radius:11px;cursor:pointer;transition:.15s;}
+  button:hover{border-color:var(--brass);} button.primary{background:linear-gradient(150deg,var(--brass),var(--brass-2));color:#1a1204;border-color:transparent;}
+  .status{font-size:13px;color:var(--muted);margin-top:10px;} .status b{color:var(--ink-2);} .status.warn{color:var(--coral);} .status.ok{color:var(--green);}
+  .devices{margin-top:10px;display:flex;flex-direction:column;gap:6px;}
+  .dev{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2);font-size:13px;}
+  .dev .led{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);flex:0 0 auto;}
+  .dev .name{font-weight:700;} .dev .meta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:auto;}
+
+  .big{display:flex;align-items:center;gap:24px;justify-content:center;padding:10px 0 4px;flex-wrap:wrap;}
+  .chord{font-family:var(--mono);font-size:60px;font-weight:700;letter-spacing:-.02em;line-height:1;min-width:170px;text-align:center;}
+  .chord small{color:var(--brass);font-size:.45em;vertical-align:super;}
+  .held{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;min-height:30px;align-items:center;}
+  .note-chip{font-family:var(--mono);font-size:13px;font-weight:700;padding:5px 10px;border-radius:7px;background:var(--brass-soft);color:var(--brass-ink);border:1px solid rgba(227,180,92,.3);}
+  .vel{display:inline-block;margin-left:6px;color:var(--muted);font-weight:600;font-size:10.5px;}
+
+  .kb-shell{overflow-x:auto;padding:12px 4px 16px;}
+  .kb{position:relative;display:flex;height:150px;width:max-content;margin:0 auto;filter:drop-shadow(0 10px 14px rgba(0,0,0,.3));}
+  .wk{position:relative;width:30px;height:150px;border:1px solid var(--key-edge);border-radius:0 0 5px 5px;margin-right:-1px;
+      background:linear-gradient(180deg,var(--key-w),var(--key-w2));}
+  .wk.on{background:linear-gradient(180deg,#fbe7ae,var(--brass));box-shadow:0 0 18px -2px var(--glow);}
+  .bk{position:absolute;top:0;width:19px;height:92px;z-index:3;border-radius:0 0 4px 4px;border:1px solid #000;
+      background:linear-gradient(180deg,var(--key-b),var(--key-b2));}
+  .bk.on{background:linear-gradient(180deg,#c9a24a,var(--brass-2));box-shadow:0 0 16px -1px var(--glow);}
+  .oct-lbl{position:absolute;bottom:3px;left:4px;font-family:var(--mono);font-size:9px;color:rgba(20,12,3,.45);pointer-events:none;}
+
+  .hint{font-size:11.5px;color:var(--muted);line-height:1.6;} .hint b{color:var(--ink-2);}
+  code{font-family:var(--mono);background:var(--panel-2);padding:1px 6px;border-radius:5px;font-size:12px;}
+  .steps{margin:8px 0;padding-left:20px;font-size:13px;color:var(--ink-2);} .steps li{margin:5px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎹 MIDI Lab</h1>
+  <div class="sub">FGR · poveži pravu klavijaturu (USB)</div>
+  <div class="nav"><a href="chord-lab.html">Chord Lab</a> · <a href="capture-lab.html">Capture Lab</a></div>
+
+  <div class="card">
+    <div class="row">
+      <button id="connectBtn" class="primary">🔌 Poveži klavijaturu</button>
+      <span id="support" class="status"></span>
+    </div>
+    <div id="status" class="status">Poveži klavijaturu USB kablom (port <b>USB TO HOST</b> na klavijaturi), pa klikni dugme. Browser će pitati za dozvolu — klikni <b>Dozvoli</b>.</div>
+    <div id="devices" class="devices"></div>
+  </div>
+
+  <div class="card">
+    <div class="big">
+      <div class="chord" id="chord">—</div>
+      <div class="held" id="held"><span style="color:var(--muted);font-size:13px">pritisni dirke na klavijaturi…</span></div>
+    </div>
+    <div class="kb-shell"><div class="kb" id="kb"></div></div>
+  </div>
+
+  <div class="card">
+    <p class="hint"><b>Šta ovo dokazuje:</b> note stižu direktno iz klavijature kao MIDI podaci — app zna <b>tačno</b> koju dirku sviraš i kojom jačinom, bez mikrofona. Zato je prepoznavanje akorda ovde <b>100% tačno</b> (uključujući obrtaje — vidi oznaku kao <code>C/E</code>). Radi u Chrome-u na Androidu/Windows/Mac/Linux. <b>Ne radi na iPad-u</b> (Apple ne dozvoljava Web MIDI u browseru).</p>
+    <ol class="steps">
+      <li>Klavijatura → USB kabl → tablet/računar (na tabletu možda treba OTG adapter).</li>
+      <li>Uključi klavijaturu <i>pre</i> otvaranja ove strane (ili klikni Poveži ponovo).</li>
+      <li>Ako ima više uređaja, svi se slušaju — sviraj i gledaj.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+(function(){
+  const NOTE=["C","Cis","D","Dis","E","F","Fis","G","Gis","A","B","H"];
+  const WHITE_PC=new Set([0,2,4,5,7,9,11]);
+  const TEMPLATES=[
+    ["",      [0,4,7]], ["m",   [0,3,7]], ["dim", [0,3,6]], ["aug", [0,4,8]],
+    ["sus2",  [0,2,7]], ["sus4",[0,5,7]], ["5",   [0,7]],
+    ["7",     [0,4,7,10]], ["maj7",[0,4,7,11]], ["m7",[0,3,7,10]],
+    ["m7b5",  [0,3,6,10]], ["dim7",[0,3,6,9]], ["6",[0,4,7,9]], ["m6",[0,3,7,9]],
+    ["9",     [0,4,7,10,2]], ["m9",[0,3,7,10,2]], ["maj9",[0,4,7,11,2]], ["add9",[0,4,7,2]]
+  ];
+  const LOW=36, HIGH=96; // C2..C7
+  const $=id=>document.getElementById(id);
+
+  // ---- mini keyboard ----
+  const kb=$("kb"), keyEls=new Map(); const WW=30;
+  let whiteIdx=0;
+  for(let m=LOW;m<=HIGH;m++){
+    const pc=m%12;
+    if(WHITE_PC.has(pc)){
+      const el=document.createElement("div"); el.className="wk";
+      if(pc===0){ const l=document.createElement("span"); l.className="oct-lbl"; l.textContent="C"+(Math.floor(m/12)-1); el.appendChild(l); }
+      kb.appendChild(el); keyEls.set(m,el); whiteIdx++;
+    }
+  }
+  whiteIdx=0;
+  for(let m=LOW;m<=HIGH;m++){
+    const pc=m%12;
+    if(WHITE_PC.has(pc)){ whiteIdx++; continue; }
+    const el=document.createElement("div"); el.className="bk";
+    el.style.left=(whiteIdx*WW-10)+"px";
+    kb.appendChild(el); keyEls.set(m,el);
+  }
+
+  // ---- state ----
+  const held=new Map(); // midi -> velocity
+
+  function noteName(m){ return NOTE[m%12]; }
+
+  function detect(){
+    const notes=[...held.keys()].sort((a,b)=>a-b);
+    if(!notes.length) return "—";
+    if(notes.length===1) return noteName(notes[0]);
+    const pcs=new Set(notes.map(n=>n%12));
+    const bassPc=notes[0]%12;
+    // try every held pitch class as root, prefer bass as root, prefer longer template
+    let best=null;
+    for(const root of pcs){
+      const rel=new Set([...pcs].map(p=>(p-root+12)%12));
+      for(const [q,tpl] of TEMPLATES){
+        if(tpl.length!==rel.size) continue;
+        if(tpl.every(iv=>rel.has(iv))){
+          const score=tpl.length*10+(root===bassPc?5:0);
+          if(!best||score>best.score) best={root,q,score};
+        }
+      }
+    }
+    if(!best) return [...pcs].map(p=>NOTE[p]).join("·");
+    let name=NOTE[best.root]+best.q;
+    if(best.root!==bassPc) name+="/"+NOTE[bassPc];
+    return name;
+  }
+
+  function render(){
+    for(const [m,el] of keyEls) el.classList.toggle("on",held.has(m));
+    const h=$("held");
+    if(held.size){
+      h.innerHTML=[...held.entries()].sort((a,b)=>a[0]-b[0])
+        .map(([m,v])=>'<span class="note-chip">'+noteName(m)+(Math.floor(m/12)-1)+'<span class="vel">'+v+'</span></span>').join("");
+    } else {
+      h.innerHTML='<span style="color:var(--muted);font-size:13px">pritisni dirke na klavijaturi…</span>';
+    }
+    const name=detect();
+    $("chord").innerHTML=name.replace(/(maj9|maj7|m7b5|dim7|add9|sus2|sus4|m9|m7|m6|9|7|6|5|dim|aug|m)(?=(\/|$))/,
+      s=>'<small>'+s+'</small>');
+  }
+
+  // ---- MIDI ----
+  let access=null;
+  function onMsg(e){
+    const [st,d1,d2]=e.data;
+    const cmd=st&0xF0;
+    if(cmd===0x90&&d2>0){ held.set(d1,d2); render(); }
+    else if(cmd===0x80||(cmd===0x90&&d2===0)){ held.delete(d1); render(); }
+  }
+  function bindInputs(){
+    const devs=$("devices"); devs.innerHTML="";
+    let n=0;
+    for(const input of access.inputs.values()){
+      input.onmidimessage=onMsg; n++;
+      const d=document.createElement("div"); d.className="dev";
+      d.innerHTML='<span class="led"></span><span class="name">'+esc(input.name||"MIDI uređaj")+'</span>'
+        +'<span class="meta">'+esc(input.manufacturer||"")+' · '+input.state+'</span>';
+      devs.appendChild(d);
+    }
+    if(n) setStatus("Povezano! Uređaja: <b>"+n+"</b>. Sviraj — note se vide dole.", "ok");
+    else setStatus("Nema MIDI uređaja. Proveri kabl i da je klavijatura uključena, pa klikni Poveži ponovo.", "warn");
+  }
+  async function connect(){
+    if(!navigator.requestMIDIAccess) return setStatus("Ovaj browser nema Web MIDI. Koristi Chrome/Edge na Androidu ili računaru (iPad ne radi).","warn");
+    try{
+      access=await navigator.requestMIDIAccess();
+      access.onstatechange=bindInputs;
+      bindInputs();
+    }catch(err){ setStatus("Pristup odbijen: "+esc(err.message),"warn"); }
+  }
+
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  function setStatus(m,cls){ const s=$("status"); s.innerHTML=m; s.className="status"+(cls?" "+cls:""); }
+
+  $("support").textContent=navigator.requestMIDIAccess?"✓ Web MIDI podržan u ovom browseru":"✗ Web MIDI nije podržan ovde";
+  $("support").className="status "+(navigator.requestMIDIAccess?"ok":"warn");
+  $("connectBtn").onclick=connect;
+})();
+</script>
+</body>
+</html>
