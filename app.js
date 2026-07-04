@@ -48,52 +48,91 @@
     ["ShiftRight", "raiseRoot"],
     ["Numpad8", "raiseRoot"]
   ]);
-  const DUGMETARA_KEY_SEQUENCE = [
-    "Slash",
-    "Quote",
-    "BracketRight",
-    "Period",
-    "Semicolon",
-    "BracketLeft",
-    "Equal",
-    "Comma",
-    "KeyL",
-    "KeyP",
-    "Minus",
-    "KeyM",
-    "KeyK",
-    "KeyO",
-    "Digit0",
-    "KeyN",
-    "KeyJ",
-    "KeyI",
-    "Digit9",
-    "KeyB",
-    "KeyH",
-    "KeyU",
-    "Digit8",
-    "KeyV",
-    "KeyG",
-    "KeyY",
-    "Digit7",
-    "KeyC",
-    "KeyF",
-    "KeyT",
-    "Digit6",
-    "KeyX",
-    "KeyD",
-    "KeyR",
-    "Digit5",
-    "KeyZ",
-    "KeyS",
-    "KeyE",
-    "Digit4",
-    "KeyA",
-    "KeyW",
-    "Digit3"
-  ];
-  const DUGMETARA_KEYBOARD_MAP = new Map(
-    DUGMETARA_KEY_SEQUENCE.map((code, index) => [code, index])
+  const DUGMETARA_KEY_SEQUENCES = {
+    "3": [
+      "Slash",
+      "Quote",
+      "BracketRight",
+      "Period",
+      "Semicolon",
+      "BracketLeft",
+      "Comma",
+      "KeyL",
+      "KeyP",
+      "KeyM",
+      "KeyK",
+      "KeyO",
+      "KeyN",
+      "KeyJ",
+      "KeyI",
+      "KeyB",
+      "KeyH",
+      "KeyU",
+      "KeyV",
+      "KeyG",
+      "KeyY",
+      "KeyC",
+      "KeyF",
+      "KeyT",
+      "KeyX",
+      "KeyR",
+      "KeyZ",
+      "KeyS",
+      "KeyE",
+      "KeyA",
+      "KeyW",
+      "KeyQ"
+    ],
+    "4": [
+      "Slash",
+      "Quote",
+      "BracketRight",
+      "Period",
+      "Semicolon",
+      "BracketLeft",
+      "Equal",
+      "Comma",
+      "KeyL",
+      "KeyP",
+      "Minus",
+      "KeyM",
+      "KeyK",
+      "KeyO",
+      "Digit0",
+      "KeyN",
+      "KeyJ",
+      "KeyI",
+      "Digit9",
+      "KeyB",
+      "KeyH",
+      "KeyU",
+      "Digit8",
+      "KeyV",
+      "KeyG",
+      "KeyY",
+      "Digit7",
+      "KeyC",
+      "KeyF",
+      "KeyT",
+      "Digit6",
+      "KeyX",
+      "KeyD",
+      "KeyR",
+      "Digit5",
+      "KeyZ",
+      "KeyS",
+      "KeyE",
+      "Digit4",
+      "KeyA",
+      "KeyW",
+      "Digit3"
+    ]
+  };
+  const DUGMETARA_KEYBOARD_MAPS = Object.fromEntries(
+    Object.entries(DUGMETARA_KEY_SEQUENCES).map(([rows, sequence]) => [
+      rows,
+      new Map(sequence.map((code, index) => [code, index]))
+    ])
   );
   const RELEASE_GUARD_MS = 140;
   const KEYBOARD_CHORD_SETTLE_MS = 50;
@@ -162,6 +201,7 @@
   const activeChordDisplay = document.getElementById("activeChordDisplay");
   const desktopMouseModeInputs = [...document.querySelectorAll("input[name='desktopMouseMode']")];
   const extensionVoicingInputs = [...document.querySelectorAll("input[name='extensionVoicing']")];
+  const dugmetaraRowInputs = [...document.querySelectorAll("input[name='dugmetaraRows']")];
   const mobileModeInputs = [...document.querySelectorAll("input[name='mobileMode']")];
   const mobileModifierButtons = [...document.querySelectorAll("[data-mobile-modifier]")];
   const songTitleInput = document.getElementById("songTitleInput");
@@ -312,6 +352,7 @@
     retriggerChordOnChangeEnabled: true,
     retriggerChordRequested: false,
     pianoKeyboardEnabled: false,
+    dugmetaraRows: "4",
     doubleTapSharpMs: DEFAULT_KEYBOARD_DOUBLE_TAP_SHARP_MS,
     inputOrder: 0,
     heldBaseKeys: new Map(),
@@ -470,6 +511,17 @@
       clearAllHeldState();
     });
 
+    dugmetaraRowInputs.forEach((input) => {
+      input.addEventListener("change", () => {
+        if (!input.checked) {
+          return;
+        }
+        state.dugmetaraRows = input.value === "3" ? "3" : "4";
+        saveKeyboardSettings();
+        clearAllHeldState();
+      });
+    });
+
     omitExtensionRootToggle.addEventListener("change", () => {
       state.omitExtensionRootEnabled = omitExtensionRootToggle.checked;
       clearKeyboardReleaseGuard();
@@ -623,18 +675,23 @@
     const settings = readJsonStorage(KEYBOARD_SETTINGS_STORAGE_KEY, {});
     state.doubleTapSharpMs = normalizeDoubleTapSharpMs(settings.doubleTapSharpMs);
     state.closeVoicingEnabled = Boolean(settings.closeVoicingEnabled);
+    state.dugmetaraRows = settings.dugmetaraRows === "3" ? "3" : "4";
     if (doubleTapSharpControl) {
       doubleTapSharpControl.value = String(state.doubleTapSharpMs);
     }
     if (closeVoicingToggle) {
       closeVoicingToggle.checked = state.closeVoicingEnabled;
     }
+    dugmetaraRowInputs.forEach((input) => {
+      input.checked = input.value === state.dugmetaraRows;
+    });
   }
 
   function saveKeyboardSettings() {
     writeJsonStorage(KEYBOARD_SETTINGS_STORAGE_KEY, {
       doubleTapSharpMs: state.doubleTapSharpMs,
-      closeVoicingEnabled: state.closeVoicingEnabled
+      closeVoicingEnabled: state.closeVoicingEnabled,
+      dugmetaraRows: state.dugmetaraRows
     });
   }
 
@@ -2162,7 +2219,7 @@
     const physicalPianoActive = isPhysicalPianoModeActive();
 
     if (physicalPianoActive) {
-      if (DUGMETARA_KEYBOARD_MAP.has(event.code)) {
+      if (getActiveDugmetaraKeyboardMap().has(event.code)) {
         event.preventDefault();
         state.heldKeyboardTones.delete(event.code);
         recomputeSound();
@@ -2298,12 +2355,16 @@
   }
 
   function getDugmetaraKeyboardMidi(code) {
-    const index = DUGMETARA_KEYBOARD_MAP.get(code);
+    const index = getActiveDugmetaraKeyboardMap().get(code);
     if (index === undefined) {
       return null;
     }
 
     return noteToMidi(0, state.baseOctave - 2) + index;
+  }
+
+  function getActiveDugmetaraKeyboardMap() {
+    return DUGMETARA_KEYBOARD_MAPS[state.dugmetaraRows] || DUGMETARA_KEYBOARD_MAPS["4"];
   }
 
   function isMinorModifierActive() {
