@@ -68,6 +68,14 @@
   </div>
 
   <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <b style="font-size:14px">MIDI monitor (dijagnostika)</b>
+      <span class="status" style="margin:0">poruka: <b id="msgCount" style="color:var(--brass-ink)">0</b> · clock/sensing: <b id="rtCount" style="color:var(--muted)">0</b></span>
+    </div>
+    <div id="monitor" style="font-family:var(--mono);font-size:12px;color:var(--ink-2);background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px;min-height:44px;max-height:150px;overflow:auto;line-height:1.7;white-space:pre-wrap">čeka poruke… (sviraj bilo šta)</div>
+  </div>
+
+  <div class="card">
     <div class="big">
       <div class="chord" id="chord">—</div>
       <div class="held" id="held"><span style="color:var(--muted);font-size:13px">pritisni dirke na klavijaturi…</span></div>
@@ -163,8 +171,22 @@
   }
 
   // ---- MIDI ----
-  let access=null;
+  let access=null, msgCount=0, rtCount=0; const monLines=[];
+  const CMD_NAMES={0x80:"NoteOff",0x90:"NoteOn",0xA0:"AfterT",0xB0:"CC",0xC0:"ProgCh",0xD0:"ChPress",0xE0:"PitchBend"};
+  function monitor(e){
+    const st=e.data[0];
+    if(st===0xF8||st===0xFE){ rtCount++; if(rtCount%50===1)$("rtCount").textContent=rtCount; return; }
+    msgCount++; $("msgCount").textContent=msgCount;
+    const cmd=st&0xF0, ch=(st&0x0F)+1;
+    const hex=[...e.data].map(b=>b.toString(16).padStart(2,"0")).join(" ");
+    let desc=CMD_NAMES[cmd]||("sys "+st.toString(16));
+    if((cmd===0x90&&e.data[2]>0)||cmd===0x80) desc+=" "+noteName(e.data[1])+(Math.floor(e.data[1]/12)-1);
+    monLines.unshift("kanal "+String(ch).padStart(2)+" | "+desc+" | "+hex);
+    if(monLines.length>14)monLines.pop();
+    $("monitor").textContent=monLines.join("\n");
+  }
   function onMsg(e){
+    monitor(e);
     const [st,d1,d2]=e.data;
     const cmd=st&0xF0;
     if(cmd===0x90&&d2>0){ held.set(d1,d2); render(); }
