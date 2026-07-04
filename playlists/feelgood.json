@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "name": "FeelGood",
+  "updatedAt": "2026-07-04T11:33:46.144Z",
+  "settings": {
+    "selectedSongId": null,
+    "seekSeconds": 1
+  },
+  "songs": []
+}
