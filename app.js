@@ -48,26 +48,53 @@
     ["ShiftRight", "raiseRoot"],
     ["Numpad8", "raiseRoot"]
   ]);
-  const PIANO_KEYBOARD_MAP = new Map([
-    ["KeyA", noteToMidi(0, 3)],
-    ["KeyW", noteToMidi(1, 3)],
-    ["KeyS", noteToMidi(2, 3)],
-    ["KeyE", noteToMidi(3, 3)],
-    ["KeyD", noteToMidi(4, 3)],
-    ["KeyF", noteToMidi(5, 3)],
-    ["KeyT", noteToMidi(6, 3)],
-    ["KeyG", noteToMidi(7, 3)],
-    ["KeyY", noteToMidi(8, 3)],
-    ["KeyH", noteToMidi(9, 3)],
-    ["KeyU", noteToMidi(10, 3)],
-    ["KeyJ", noteToMidi(11, 3)],
-    ["KeyK", noteToMidi(0, 4)],
-    ["KeyO", noteToMidi(1, 4)],
-    ["KeyL", noteToMidi(2, 4)],
-    ["KeyP", noteToMidi(3, 4)],
-    ["Semicolon", noteToMidi(4, 4)],
-    ["Quote", noteToMidi(5, 4)]
-  ]);
+  const DUGMETARA_KEY_SEQUENCE = [
+    "Slash",
+    "Quote",
+    "BracketRight",
+    "Period",
+    "Semicolon",
+    "BracketLeft",
+    "Equal",
+    "Comma",
+    "KeyL",
+    "KeyP",
+    "Minus",
+    "KeyM",
+    "KeyK",
+    "KeyO",
+    "Digit0",
+    "KeyN",
+    "KeyJ",
+    "KeyI",
+    "Digit9",
+    "KeyB",
+    "KeyH",
+    "KeyU",
+    "Digit8",
+    "KeyV",
+    "KeyG",
+    "KeyY",
+    "Digit7",
+    "KeyC",
+    "KeyF",
+    "KeyT",
+    "Digit6",
+    "KeyX",
+    "KeyD",
+    "KeyR",
+    "Digit5",
+    "KeyZ",
+    "KeyS",
+    "KeyE",
+    "Digit4",
+    "KeyA",
+    "KeyW",
+    "Digit3"
+  ];
+  const DUGMETARA_KEYBOARD_MAP = new Map(
+    DUGMETARA_KEY_SEQUENCE.map((code, index) => [code, index])
+  );
   const RELEASE_GUARD_MS = 140;
   const KEYBOARD_CHORD_SETTLE_MS = 50;
   const DEFAULT_KEYBOARD_DOUBLE_TAP_SHARP_MS = 90;
@@ -2019,7 +2046,8 @@
     const physicalPianoActive = isPhysicalPianoModeActive();
 
     if (physicalPianoActive) {
-      if (PIANO_KEYBOARD_MAP.has(event.code)) {
+      const midi = getDugmetaraKeyboardMidi(event.code);
+      if (midi !== null) {
         event.preventDefault();
 
         if (event.repeat) {
@@ -2028,10 +2056,10 @@
 
         focusAppSoon();
         ensureAudio();
-        state.heldKeyboardTones.set(event.code, PIANO_KEYBOARD_MAP.get(event.code));
+        state.heldKeyboardTones.set(event.code, midi);
         recomputeSound();
-        return;
       }
+      return;
     }
 
     if (handleYouTubeShortcut(event)) {
@@ -2134,12 +2162,12 @@
     const physicalPianoActive = isPhysicalPianoModeActive();
 
     if (physicalPianoActive) {
-      if (PIANO_KEYBOARD_MAP.has(event.code)) {
+      if (DUGMETARA_KEYBOARD_MAP.has(event.code)) {
         event.preventDefault();
         state.heldKeyboardTones.delete(event.code);
         recomputeSound();
-        return;
       }
+      return;
     }
 
     if (handleYouTubeShortcut(event)) {
@@ -2267,6 +2295,15 @@
 
   function isPhysicalPianoModeActive() {
     return state.pianoKeyboardEnabled && state.desktopMouseMode === "tone";
+  }
+
+  function getDugmetaraKeyboardMidi(code) {
+    const index = DUGMETARA_KEYBOARD_MAP.get(code);
+    if (index === undefined) {
+      return null;
+    }
+
+    return noteToMidi(0, state.baseOctave - 2) + index;
   }
 
   function isMinorModifierActive() {
