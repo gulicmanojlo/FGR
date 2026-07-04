@@ -99,10 +99,13 @@
   const MAX_OCTAVE = 6;
   const LOWEST_MIDI = noteToMidi(7, 1);
   const HIGHEST_MIDI = noteToMidi(11, 7);
-  const REPERTOIRE_STORAGE_KEY = "pwa-klavir-active-playlist-v1";
+  const REPERTOIRE_STORAGE_KEY = "pwa-klavir-server-playlist-v1";
   const PLAYER_SETTINGS_STORAGE_KEY = "pwa-klavir-player-settings-v1";
   const KEYBOARD_SETTINGS_STORAGE_KEY = "pwa-klavir-keyboard-settings-v1";
-  const PLAYLISTS_API_URL = "https://api.github.com/repos/gulicmanojlo/FGR/contents/playlists?ref=main";
+  const GITHUB_TOKEN_STORAGE_KEY = "pwa-klavir-github-token-v1";
+  const GITHUB_API_BASE = "https://api.github.com/repos/gulicmanojlo/FGR";
+  const GITHUB_BRANCH = "main";
+  const PLAYLISTS_API_URL = `${GITHUB_API_BASE}/contents/playlists?ref=${GITHUB_BRANCH}`;
   const PLAYLIST_BASE_PATH = "playlists/";
   const PLAYLIST_FILE_EXTENSION = ".json";
   const DEFAULT_YOUTUBE_SEEK_SECONDS = 10;
@@ -147,9 +150,14 @@
   const youtubeRewind = document.getElementById("youtubeRewind");
   const youtubeForward = document.getElementById("youtubeForward");
   const youtubeSeekSeconds = document.getElementById("youtubeSeekSeconds");
+  const playlistStart = document.getElementById("playlistStart");
+  const playlistWorkspace = document.getElementById("playlistWorkspace");
+  const startLoadPlaylistButton = document.getElementById("startLoadPlaylistButton");
+  const startNewPlaylistButton = document.getElementById("startNewPlaylistButton");
   const loadPlaylistButton = document.getElementById("loadPlaylistButton");
   const newPlaylistButton = document.getElementById("newPlaylistButton");
   const playlistDialog = document.getElementById("playlistDialog");
+  const playlistDialogTitle = document.getElementById("playlistDialogTitle");
   const playlistDialogClose = document.getElementById("playlistDialogClose");
   const playlistBrowser = document.getElementById("playlistBrowser");
 
@@ -334,8 +342,12 @@
     repertoire: [],
     activePlaylistName: "",
     activePlaylistPath: "",
+    activePlaylistSha: "",
     availablePlaylists: [],
     playlistBrowserOpen: false,
+    playlistSaveTimer: null,
+    playlistSaveInFlight: false,
+    playlistDirtyAfterSave: false,
     selectedSongId: null,
     youtubeSeekSeconds: DEFAULT_YOUTUBE_SEEK_SECONDS,
     youtubeApiPromise: null,
@@ -358,6 +370,7 @@
     loadKeyboardSettings();
     renderRepertoire();
     updateSelectedSongPanel();
+    updatePlaylistMode();
     bindControls();
     updateOctaveControls();
     updateMobileModifierState();
@@ -533,8 +546,10 @@
       focusFirstSearchResult();
     });
 
+    startLoadPlaylistButton.addEventListener("click", openPlaylistBrowser);
+    startNewPlaylistButton.addEventListener("click", openNewPlaylistDialog);
     loadPlaylistButton.addEventListener("click", openPlaylistBrowser);
-    newPlaylistButton.addEventListener("click", createNewPlaylist);
+    newPlaylistButton.addEventListener("click", openNewPlaylistDialog);
     playlistDialogClose.addEventListener("click", closePlaylistBrowser);
     playlistDialog.addEventListener("click", (event) => {
       if (event.target?.hasAttribute("data-playlist-close")) {
@@ -558,6 +573,7 @@
     const data = normalizeRepertoireFileData(playlist || { songs: [] });
     state.activePlaylistName = String(playlist?.name || "");
     state.activePlaylistPath = String(playlist?.path || "");
+    state.activePlaylistSha = String(playlist?.sha || "");
     state.repertoire = data.songs;
 
     const settings = readJsonStorage(PLAYER_SETTINGS_STORAGE_KEY, {});
@@ -610,9 +626,51 @@
     }
   }
 
+  function readSessionValue(key) {
+    try {
+      return window.sessionStorage.getItem(key) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function writeSessionValue(key, value) {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch {
+      // The token can still be entered again if session storage is unavailable.
+    }
+  }
+
+  function getGitHubToken() {
+    return readSessionValue(GITHUB_TOKEN_STORAGE_KEY).trim();
+  }
+
+  function ensureGitHubToken() {
+    const existing = getGitHubToken();
+    if (existing) {
+      return existing;
+    }
+
+    const token = window.prompt("GitHub token za cuvanje playlisti");
+    const normalized = String(token || "").trim();
+    if (!normalized) {
+      throw new Error("GitHub token nije unet");
+    }
+    writeSessionValue(GITHUB_TOKEN_STORAGE_KEY, normalized);
+    return normalized;
+  }
+
+  function updatePlaylistMode() {
+    const hasPlaylist = Boolean(state.activePlaylistName && state.activePlaylistPath);
+    playlistStart.hidden = hasPlaylist;
+    playlistWorkspace.hidden = !hasPlaylist;
+  }
+
   async function openPlaylistBrowser() {
     state.playlistBrowserOpen = true;
     playlistDialog.hidden = false;
+    playlistDialogTitle.textContent = "Load playlist";
     playlistBrowser.innerHTML = '<div class="playlist-browser-state">Ucitavanje...</div>';
     setYouTubeStatus("Ucitavanje playlisti");
 
@@ -649,6 +707,7 @@
       .map((entry) => ({
         name: entry.name.slice(0, -PLAYLIST_FILE_EXTENSION.length),
         path: entry.path,
+        sha: entry.sha,
         url: entry.download_url
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "sr"));
@@ -668,6 +727,7 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = "playlist-browser-item";
+      button.setAttribute("role", "listitem");
       button.textContent = playlist.name;
       button.addEventListener("click", () => loadPlaylistFromServer(playlist));
       playlistBrowser.append(button);
@@ -682,9 +742,11 @@
         throw new Error("Playlist nije ucitana");
       }
       const data = normalizeRepertoireFileData(await response.json());
+      ensureGitHubToken();
       applyRepertoireFileData(data, {
         playlistName: data.name || playlist.name,
         playlistPath: playlist.path,
+        playlistSha: playlist.sha,
         skipFileSave: true,
         status: `Playlist: ${data.name || playlist.name}`
       });
@@ -694,21 +756,83 @@
     }
   }
 
-  function createNewPlaylist() {
-    const name = window.prompt("Ime playliste");
+  function openNewPlaylistDialog() {
+    state.playlistBrowserOpen = true;
+    playlistDialog.hidden = false;
+    playlistDialogTitle.textContent = "New playlist";
+    playlistBrowser.innerHTML = "";
+
+    const form = document.createElement("form");
+    form.className = "playlist-new-form";
+    form.innerHTML = `
+      <label class="stacked-field">
+        <span>Ime playliste</span>
+        <input id="newPlaylistNameInput" class="sheet-input" type="text" autocomplete="off" required>
+      </label>
+      <label class="stacked-field">
+        <span>GitHub token</span>
+        <input id="githubTokenInput" class="sheet-input" type="password" autocomplete="off" placeholder="fine-grained token">
+      </label>
+      <button class="text-button primary-button" type="submit">Napravi</button>
+    `;
+    playlistBrowser.append(form);
+
+    const tokenInput = form.querySelector("#githubTokenInput");
+    tokenInput.value = getGitHubToken();
+    form.querySelector("#newPlaylistNameInput").focus();
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      createNewPlaylistOnServer(
+        form.querySelector("#newPlaylistNameInput").value,
+        tokenInput.value
+      );
+    });
+  }
+
+  async function createNewPlaylistOnServer(name, token) {
     const normalizedName = String(name || "").trim();
     if (!normalizedName) {
       return;
     }
 
-    state.activePlaylistName = normalizedName;
-    state.activePlaylistPath = `${PLAYLIST_BASE_PATH}${slugifyPlaylistName(normalizedName)}${PLAYLIST_FILE_EXTENSION}`;
-    state.repertoire = [];
-    state.selectedSongId = null;
-    saveRepertoire({ skipFileSave: true });
-    renderRepertoire();
-    updateSelectedSongPanel();
-    setYouTubeStatus(`Nova playlist lokalno: ${normalizedName}`);
+    const normalizedToken = String(token || "").trim();
+    if (!normalizedToken) {
+      setYouTubeStatus("GitHub token je potreban");
+      return;
+    }
+    writeSessionValue(GITHUB_TOKEN_STORAGE_KEY, normalizedToken);
+
+    const path = `${PLAYLIST_BASE_PATH}${slugifyPlaylistName(normalizedName)}${PLAYLIST_FILE_EXTENSION}`;
+    const data = {
+      version: 1,
+      name: normalizedName,
+      updatedAt: new Date().toISOString(),
+      settings: {
+        selectedSongId: null,
+        seekSeconds: state.youtubeSeekSeconds
+      },
+      songs: []
+    };
+
+    setYouTubeStatus("Pravljenje playliste");
+    try {
+      const result = await putGitHubFile(path, data, {
+        message: `Create playlist ${normalizedName}`
+      });
+      state.activePlaylistName = normalizedName;
+      state.activePlaylistPath = path;
+      state.activePlaylistSha = result.content?.sha || "";
+      state.repertoire = [];
+      state.selectedSongId = null;
+      saveRepertoire({ skipServerSave: true });
+      renderRepertoire();
+      updateSelectedSongPanel();
+      updatePlaylistMode();
+      closePlaylistBrowser();
+      setYouTubeStatus(`Playlist napravljena: ${normalizedName}`);
+    } catch (error) {
+      setYouTubeStatus(error?.status === 422 ? "Playlist vec postoji" : "Playlist nije napravljena");
+    }
   }
 
   function slugifyPlaylistName(name) {
@@ -736,9 +860,131 @@
     writeJsonStorage(REPERTOIRE_STORAGE_KEY, {
       name: state.activePlaylistName,
       path: state.activePlaylistPath,
+      sha: state.activePlaylistSha,
       ...buildRepertoireFileData()
     });
     savePlayerSettings();
+    if (!options.skipFileSave && !options.skipServerSave) {
+      scheduleServerPlaylistSave();
+    }
+  }
+
+  function scheduleServerPlaylistSave(delay = 700) {
+    if (!state.activePlaylistPath) {
+      return;
+    }
+    if (!getGitHubToken()) {
+      setYouTubeStatus("GitHub token je potreban");
+      return;
+    }
+    if (state.playlistSaveTimer) {
+      window.clearTimeout(state.playlistSaveTimer);
+    }
+    state.playlistSaveTimer = window.setTimeout(() => {
+      state.playlistSaveTimer = null;
+      saveActivePlaylistToServer();
+    }, delay);
+  }
+
+  async function saveActivePlaylistToServer(options = {}) {
+    if (!state.activePlaylistPath) {
+      return;
+    }
+    if (state.playlistSaveInFlight) {
+      state.playlistDirtyAfterSave = true;
+      return;
+    }
+
+    state.playlistSaveInFlight = true;
+    state.playlistDirtyAfterSave = false;
+    setYouTubeStatus("Cuvanje playliste");
+
+    try {
+      const result = await putGitHubFile(state.activePlaylistPath, buildRepertoireFileData(), {
+        message: `Update playlist ${state.activePlaylistName || state.activePlaylistPath}`,
+        sha: state.activePlaylistSha
+      });
+      state.activePlaylistSha = result.content?.sha || state.activePlaylistSha;
+      saveRepertoire({ skipServerSave: true });
+      setYouTubeStatus("Playlist sacuvana");
+    } catch (error) {
+      if (!options.retry && (error?.status === 409 || error?.status === 422 || error?.status === 404)) {
+        const metadata = await fetchGitHubFileMetadata(state.activePlaylistPath);
+        state.activePlaylistSha = metadata.sha || "";
+        state.playlistSaveInFlight = false;
+        return await saveActivePlaylistToServer({ retry: true });
+      }
+      setYouTubeStatus(error?.status === 401 ? "GitHub token nije dobar" : "Playlist nije sacuvana");
+    } finally {
+      state.playlistSaveInFlight = false;
+      if (state.playlistDirtyAfterSave) {
+        scheduleServerPlaylistSave(150);
+      }
+    }
+  }
+
+  async function putGitHubFile(path, data, options = {}) {
+    const token = ensureGitHubToken();
+    const body = {
+      message: options.message || `Update ${path}`,
+      content: encodeBase64Utf8(`${JSON.stringify(data, null, 2)}\n`),
+      branch: GITHUB_BRANCH
+    };
+    if (options.sha) {
+      body.sha = options.sha;
+    }
+
+    const response = await fetch(githubContentsUrl(path), {
+      method: "PUT",
+      headers: githubHeaders(token),
+      body: JSON.stringify(body)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload.message || "GitHub upis nije uspeo");
+      error.status = response.status;
+      error.payload = payload;
+      throw error;
+    }
+    return payload;
+  }
+
+  async function fetchGitHubFileMetadata(path) {
+    const response = await fetch(`${githubContentsUrl(path)}?ref=${GITHUB_BRANCH}&cache=${Date.now()}`, {
+      headers: githubHeaders(getGitHubToken()),
+      cache: "no-store"
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload.message || "GitHub fajl nije dostupan");
+      error.status = response.status;
+      throw error;
+    }
+    return payload;
+  }
+
+  function githubHeaders(token) {
+    const headers = {
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
+  }
+
+  function githubContentsUrl(path) {
+    return `${GITHUB_API_BASE}/contents/${path.split("/").map(encodeURIComponent).join("/")}`;
+  }
+
+  function encodeBase64Utf8(text) {
+    const bytes = new TextEncoder().encode(text);
+    let binary = "";
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary);
   }
 
   function savePlayerSettings() {
@@ -793,6 +1039,9 @@
     if (data.path || options.playlistPath) {
       state.activePlaylistPath = String(options.playlistPath || data.path);
     }
+    if (options.playlistSha) {
+      state.activePlaylistSha = String(options.playlistSha);
+    }
     state.repertoire = options.merge
       ? mergeRepertoireSongs(state.repertoire, data.songs)
       : data.songs;
@@ -808,6 +1057,7 @@
     renderRepertoire();
     updateSelectedSongPanel();
     updateYouTubeSeekButtons();
+    updatePlaylistMode();
     if (options.status) {
       setYouTubeStatus(options.status);
     }

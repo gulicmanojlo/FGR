@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <link rel="stylesheet" href="styles.css?v=63">
+    <link rel="stylesheet" href="styles.css?v=64">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="PWA klavir">
@@ -171,7 +171,15 @@
       </section>
 
       <section id="repertoirePanel" class="repertoire-panel" aria-label="Playlist">
-        <div class="repertoire-layout">
+        <div id="playlistStart" class="playlist-start">
+          <h2>Playlist</h2>
+          <div class="playlist-start-actions">
+            <button id="startLoadPlaylistButton" class="text-button" type="button">Load</button>
+            <button id="startNewPlaylistButton" class="text-button" type="button">New</button>
+          </div>
+        </div>
+
+        <div id="playlistWorkspace" class="repertoire-layout" hidden>
           <section class="repertoire-sheet" aria-label="Playlist pesama">
             <div class="repertoire-topline">
               <h2>Playlist</h2>
@@ -244,11 +252,11 @@
             <h2 id="playlistDialogTitle">Playlists</h2>
             <button id="playlistDialogClose" class="mini-button" type="button" aria-label="Zatvori">X</button>
           </div>
-          <div id="playlistBrowser" class="playlist-browser" role="list"></div>
+          <div id="playlistBrowser" class="playlist-browser"></div>
         </section>
       </div>
     </main>
 
-    <script src="app.js?v=63" defer></script>
+    <script src="app.js?v=64" defer></script>
   </body>
 </html>
