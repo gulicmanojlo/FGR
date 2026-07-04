@@ -708,7 +708,7 @@
     saveRepertoire({ skipFileSave: true });
     renderRepertoire();
     updateSelectedSongPanel();
-    setYouTubeStatus(`Nova playlist: ${normalizedName}`);
+    setYouTubeStatus(`Nova playlist lokalno: ${normalizedName}`);
   }
 
   function slugifyPlaylistName(name) {
