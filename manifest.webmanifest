@@ -1,13 +1,13 @@
 {
-  "name": "PWA Klavir",
-  "short_name": "Klavir",
-  "description": "Installable PWA za sviranje klavirskih tonova i akorda.",
+  "name": "FGR — Klavir, Repertoar, Harmonija",
+  "short_name": "FGR",
+  "description": "PWA za muzicare: klavir, repertoar sa YouTube-om, skidanje harmonije i ucenje.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f4f7f5",
-  "theme_color": "#1f7a5c",
+  "background_color": "#141009",
+  "theme_color": "#141009",
   "icons": [
     {
       "src": "icons/icon.svg",

@@ -1,14 +1,18 @@
-﻿const CACHE_NAME = "pwa-klavir-v67";
+﻿const CACHE_NAME = "pwa-klavir-v70";
 const CORE_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=64",
-  "./app.js?v=67",
+  "./styles.css?v=70",
+  "./app.js?v=70",
+  "./ui-shell.js?v=70",
   "./manifest.webmanifest",
   "./repertoire.json",
   "./icons/icon.svg",
   "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./icons/icon-512.png",
+  "./chord-lab.html",
+  "./capture-lab.html",
+  "./midi-lab.html"
 ];
 const SAMPLE_ASSETS = [
   "./samples/piano/A0v12.mp3",
@@ -80,8 +84,10 @@ self.addEventListener("fetch", (event) => {
     url.pathname.endsWith("/") ||
     url.pathname.endsWith("/index.html") ||
     url.pathname.endsWith("/app.js") ||
+    url.pathname.endsWith("/ui-shell.js") ||
     url.pathname.endsWith("/styles.css") ||
-    url.pathname.endsWith("/service-worker.js");
+    url.pathname.endsWith("/service-worker.js") ||
+    url.pathname.endsWith(".html");
 
   if (isAppShell) {
     event.respondWith(

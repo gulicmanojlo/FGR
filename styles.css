@@ -1,23 +1,84 @@
-﻿:root {
-  color-scheme: light;
-  --page-bg: #f4f7f5;
-  --panel-bg: #ffffff;
-  --ink: #17211d;
-  --muted: #5f6d67;
-  --line: #d6ded9;
-  --accent: #1f7a5c;
-  --accent-strong: #155840;
-  --accent-soft: #dff3ec;
-  --warn: #b45f1f;
-  --key-white: #fffdf8;
-  --key-white-edge: #d7d0c2;
-  --key-black: #191c1b;
-  --key-black-edge: #3b403e;
-  --active: #2ea878;
-  --active-deep: #0f5b40;
+/* ============================================================
+   FGR — Ebony & Brass
+   Dark theme is the default (stage-friendly); light via
+   :root[data-theme="light"]. All component class names are kept
+   compatible with app.js.
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+  --page-bg: #141009;
+  --page-bg-2: #0d0a05;
+  --panel-bg: #1d1810;
+  --panel-bg-2: #241e15;
+  --panel-bg-3: #2c2519;
+  --ink: #f3ecdd;
+  --ink-2: #c6bba4;
+  --muted: #9d9078;
+  --line: #332b1e;
+  --line-soft: #271f15;
+
+  --accent: #e3b45c;
+  --accent-strong: #f4d99a;
+  --accent-deep: #c89234;
+  --accent-soft: #2b2214;
+  --accent-contrast: #1a1204;
+  --warn: #e28a58;
+  --danger: #e0716a;
+
+  --key-white: #f4efe2;
+  --key-white-2: #e3dccb;
+  --key-white-edge: #b6a988;
+  --key-black: #191308;
+  --key-black-2: #0b0803;
+  --key-black-edge: #000000;
+  --active: #f0c766;
+  --active-deep: #a87b1f;
+
+  --shadow: 0 2px 4px rgba(0, 0, 0, 0.4), 0 18px 40px -20px rgba(0, 0, 0, 0.65);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 16px -9px rgba(0, 0, 0, 0.55);
+  --focus-ring: 0 0 0 3px rgba(227, 180, 92, 0.35);
+
   --white-w: 48px;
   --black-w: 30px;
   --keyboard-h: 300px;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page-bg: #efe9dd;
+  --page-bg-2: #e5ddce;
+  --panel-bg: #fbf9f3;
+  --panel-bg-2: #f3eee3;
+  --panel-bg-3: #ebe4d5;
+  --ink: #241c10;
+  --ink-2: #584c39;
+  --muted: #8b7d64;
+  --line: #ddd4c2;
+  --line-soft: #e9e2d3;
+
+  --accent: #b0791f;
+  --accent-strong: #7a5310;
+  --accent-deep: #956313;
+  --accent-soft: #f2e5c8;
+  --accent-contrast: #fffdf6;
+  --warn: #c1633a;
+  --danger: #b3261e;
+
+  --key-white: #fdfcf7;
+  --key-white-2: #f0ebde;
+  --key-white-edge: #cdc2a8;
+  --key-black: #231c10;
+  --key-black-2: #100c06;
+  --key-black-edge: #060402;
+  --active: #e0b34f;
+  --active-deep: #8a6414;
+
+  --shadow: 0 2px 4px rgba(40, 30, 10, 0.06), 0 18px 38px -20px rgba(40, 30, 10, 0.28);
+  --shadow-sm: 0 1px 2px rgba(40, 30, 10, 0.07), 0 5px 14px -8px rgba(40, 30, 10, 0.2);
+  --focus-ring: 0 0 0 3px rgba(176, 121, 31, 0.28);
 }
 
 * {
@@ -35,9 +96,13 @@ body {
 
 body {
   margin: 0;
-  background: var(--page-bg);
+  background:
+    radial-gradient(1000px 460px at 88% -8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--page-bg), var(--page-bg-2));
+  background-attachment: fixed;
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -50,28 +115,188 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+:where(button, input, select, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .app-shell {
   min-height: 100vh;
   min-height: 100dvh;
   min-width: 0;
-  display: grid;
-  grid-template-rows: auto auto auto auto;
+  display: flex;
+  flex-direction: column;
   outline: none;
   overflow-x: hidden;
 }
+
+/* ---------------- App bar (brand + tabs + actions) ---------------- */
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--page-bg) 86%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: auto;
+}
+
+.brand-logo {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: linear-gradient(150deg, var(--accent), var(--accent-deep));
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.brand-logo svg {
+  width: 22px;
+  height: 22px;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.brand-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.app-tabs {
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-sm);
+}
+
+.app-tabs button {
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.app-tabs button:hover {
+  color: var(--ink);
+}
+
+.app-tabs button[aria-selected="true"] {
+  background: linear-gradient(150deg, var(--accent), var(--accent-deep));
+  color: var(--accent-contrast);
+  box-shadow: var(--shadow-sm);
+}
+
+.appbar-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.icon-button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-bg);
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.icon-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------------- Settings panel ---------------- */
+
+.settings-panel {
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-bg);
+  padding: 14px;
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.settings-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-group > .control-label {
+  min-width: 0;
+}
+
+.settings-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+/* ---------------- Tab panels ---------------- */
+
+.tab-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+}
+
+/* ---------------- Toolbar (controls) ---------------- */
 
 .topbar {
   display: flex;
   align-items: stretch;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 10px 14px;
   background: var(--panel-bg);
   border-bottom: 1px solid var(--line);
-  box-shadow: 0 1px 8px rgba(23, 33, 29, 0.06);
-  position: sticky;
-  top: 0;
-  z-index: 20;
 }
 
 .toolbar-section {
@@ -101,8 +326,10 @@ button {
 
 .toolbar-title {
   color: var(--accent-strong);
-  font-size: 12px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   line-height: 1;
   min-width: 58px;
   flex: 0 0 58px;
@@ -126,7 +353,7 @@ button {
 
 .control-label {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
 }
 
@@ -147,17 +374,18 @@ button {
 .status-pill,
 .segmented span,
 .modifier-button {
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .text-button {
   min-height: 38px;
   padding: 0 12px;
   border: 1px solid var(--line);
-  background: #f8faf9;
+  background: var(--panel-bg-2);
   color: var(--ink);
   cursor: pointer;
   font-weight: 700;
+  transition: border-color 0.15s;
 }
 
 .text-button:hover {
@@ -169,7 +397,8 @@ button {
 }
 
 .text-button:disabled {
-  color: #9aa5a0;
+  color: var(--muted);
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
@@ -179,7 +408,7 @@ button {
   align-items: center;
   justify-content: center;
   padding: 0 12px;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   background: var(--accent-soft);
   color: var(--accent-strong);
   font-weight: 800;
@@ -203,7 +432,7 @@ button {
 
 .select-label {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
 }
 
@@ -211,8 +440,8 @@ button {
   min-height: 36px;
   max-width: 155px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #f8faf9;
+  border-radius: var(--radius-sm);
+  background: var(--panel-bg-2);
   color: var(--ink);
   font-weight: 700;
   padding: 0 10px;
@@ -249,12 +478,16 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--accent-strong);
   font-weight: 800;
+  font-size: 16px;
 }
+
+/* ---------------- Mobile quick controls ---------------- */
 
 .mobile-controls {
   display: none;
-  background: #fbfcfb;
+  background: var(--panel-bg);
   border-bottom: 1px solid var(--line);
   padding: 10px 12px;
   gap: 12px;
@@ -267,8 +500,8 @@ button {
   grid-template-columns: 1fr 1fr;
   padding: 3px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #eef4f1;
+  border-radius: var(--radius-sm);
+  background: var(--panel-bg-2);
 }
 
 .segmented label {
@@ -292,12 +525,14 @@ button {
   padding: 0 12px;
   color: var(--muted);
   font-weight: 800;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
 }
 
 .segmented input:checked + span {
-  background: var(--panel-bg);
-  color: var(--accent-strong);
-  box-shadow: 0 1px 4px rgba(23, 33, 29, 0.12);
+  background: linear-gradient(150deg, var(--accent), var(--accent-deep));
+  color: var(--accent-contrast);
+  box-shadow: var(--shadow-sm);
 }
 
 .segmented.compact span {
@@ -317,7 +552,7 @@ button {
 .modifier-button {
   min-height: 48px;
   border: 1px solid var(--line);
-  background: var(--panel-bg);
+  background: var(--panel-bg-2);
   color: var(--ink);
   cursor: pointer;
   font-size: 24px;
@@ -331,15 +566,17 @@ button {
 
 .modifier-button.is-held,
 .modifier-button:active {
-  background: var(--accent);
-  border-color: var(--accent-strong);
-  color: #ffffff;
+  background: linear-gradient(150deg, var(--accent), var(--accent-deep));
+  border-color: var(--accent-deep);
+  color: var(--accent-contrast);
 }
 
 .modifier-button:disabled {
   opacity: 0.38;
   cursor: not-allowed;
 }
+
+/* ---------------- Piano ---------------- */
 
 .piano-area {
   min-height: 0;
@@ -348,7 +585,7 @@ button {
   flex-direction: column;
   justify-content: flex-end;
   gap: 10px;
-  padding: 16px 12px max(14px, env(safe-area-inset-bottom));
+  padding: 18px 12px max(16px, env(safe-area-inset-bottom));
 }
 
 .piano-scroll {
@@ -359,9 +596,10 @@ button {
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #cfd7d2;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel-bg-3), var(--panel-bg-2));
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  padding: 10px 10px 12px;
 }
 
 .keyboard {
@@ -369,9 +607,13 @@ button {
   height: var(--keyboard-h);
   width: calc(var(--white-count) * var(--white-w));
   min-width: calc(var(--white-count) * var(--white-w));
-  background: linear-gradient(#343938 0 0) top / 100% 10px no-repeat, #c9d0cb;
+  background:
+    linear-gradient(color-mix(in srgb, var(--warn) 55%, #4a2418) 0 0) top / 100% 10px no-repeat,
+    var(--panel-bg-3);
+  border-radius: 4px 4px 8px 8px;
   touch-action: pan-x;
   user-select: none;
+  filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.3));
 }
 
 .key {
@@ -385,6 +627,7 @@ button {
 .key:focus-visible {
   outline: 3px solid var(--warn);
   outline-offset: -5px;
+  box-shadow: none;
 }
 
 .key.white {
@@ -395,10 +638,12 @@ button {
   height: calc(var(--keyboard-h) - 10px);
   border: 1px solid var(--key-white-edge);
   border-top: 0;
+  border-radius: 0 0 6px 6px;
   background:
     linear-gradient(90deg, rgba(0, 0, 0, 0.08), transparent 10%, transparent 90%, rgba(0, 0, 0, 0.08)),
-    linear-gradient(#ffffff, var(--key-white));
-  box-shadow: inset 0 -8px 12px rgba(35, 25, 10, 0.08);
+    linear-gradient(#fdfbf4, var(--key-white) 12%, var(--key-white-2));
+  box-shadow: inset 0 -8px 12px rgba(35, 25, 10, 0.14), inset 0 1px 0 #ffffff;
+  transition: background 0.05s;
 }
 
 .key.black {
@@ -409,10 +654,11 @@ button {
   height: calc(var(--keyboard-h) * 0.62);
   border: 1px solid var(--key-black-edge);
   border-top: 0;
+  border-radius: 0 0 5px 5px;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 22%, transparent 78%, rgba(0, 0, 0, 0.45)),
-    linear-gradient(#2e3331, var(--key-black));
-  box-shadow: inset 0 -10px 14px rgba(0, 0, 0, 0.35), 0 4px 8px rgba(0, 0, 0, 0.28);
+    linear-gradient(90deg, rgba(255, 255, 255, 0.16), transparent 22%, transparent 78%, rgba(0, 0, 0, 0.45)),
+    linear-gradient(#2e2921, var(--key-black) 20%, var(--key-black-2));
+  box-shadow: inset 0 -10px 14px rgba(0, 0, 0, 0.4), 0 5px 9px rgba(0, 0, 0, 0.45);
 }
 
 .key-label {
@@ -422,7 +668,7 @@ button {
   bottom: 9px;
   display: flex;
   justify-content: center;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--key-black) 52%, transparent);
   font-size: 12px;
   font-weight: 800;
   pointer-events: none;
@@ -430,31 +676,43 @@ button {
 
 .key.black .key-label {
   bottom: 12px;
-  color: #ffffff;
+  color: rgba(255, 255, 255, 0.55);
   font-size: 10px;
 }
 
 .key.is-active.white {
   background:
     linear-gradient(90deg, rgba(0, 0, 0, 0.08), transparent 10%, transparent 90%, rgba(0, 0, 0, 0.08)),
-    linear-gradient(#e8fff4, #77dbad);
-  border-color: var(--active);
+    linear-gradient(#fbe7ae, var(--active));
+  border-color: var(--active-deep);
+  box-shadow: 0 0 24px -2px var(--active), inset 0 -8px 12px rgba(90, 60, 5, 0.22);
+}
+
+.key.is-active.white .key-label {
+  color: #4a2f00;
 }
 
 .key.is-active.black {
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.22), transparent 22%, transparent 78%, rgba(0, 0, 0, 0.38)),
-    linear-gradient(#2cb87f, var(--active-deep));
+    linear-gradient(#c9a24a, var(--active-deep));
   border-color: var(--active-deep);
+  box-shadow: 0 0 20px -1px var(--active);
+}
+
+.key.is-active.black .key-label {
+  color: #fff2d6;
 }
 
 .hide-labels .key-label {
   display: none;
 }
 
+/* ---------------- Repertoire / playlist ---------------- */
+
 .repertoire-panel {
   width: 100%;
-  padding: 0 12px 18px;
+  padding: 14px 12px 18px;
 }
 
 .playlist-start {
@@ -464,8 +722,9 @@ button {
   align-content: center;
   gap: 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #ffffff;
+  border-radius: var(--radius);
+  background: var(--panel-bg);
+  box-shadow: var(--shadow);
 }
 
 .playlist-start h2 {
@@ -496,9 +755,9 @@ button {
 .youtube-panel {
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel-bg);
-  box-shadow: 0 1px 8px rgba(23, 33, 29, 0.05);
+  box-shadow: var(--shadow);
 }
 
 .repertoire-sheet {
@@ -543,9 +802,10 @@ button {
 }
 
 .repertoire-file-controls {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .playlist-controls .text-button {
@@ -569,7 +829,7 @@ button {
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(10, 16, 14, 0.42);
+  background: rgba(5, 4, 2, 0.55);
   cursor: default;
 }
 
@@ -580,9 +840,9 @@ button {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--panel-bg);
-  box-shadow: 0 18px 50px rgba(23, 33, 29, 0.28);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 
@@ -594,7 +854,7 @@ button {
   gap: 12px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--line);
-  background: #fbfcfb;
+  background: var(--panel-bg-2);
 }
 
 .playlist-dialog-header h2 {
@@ -617,8 +877,8 @@ button {
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #ffffff;
+  border-radius: var(--radius-sm);
+  background: var(--panel-bg-2);
   color: var(--ink);
   padding: 0 10px;
   text-align: left;
@@ -657,7 +917,7 @@ button {
   gap: 8px;
   padding: 10px;
   border-bottom: 1px solid var(--line);
-  background: #fbfcfb;
+  background: var(--panel-bg-2);
 }
 
 .sheet-input {
@@ -665,15 +925,21 @@ button {
   min-width: 0;
   min-height: 36px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #ffffff;
+  border-radius: var(--radius-sm);
+  background: var(--panel-bg);
   color: var(--ink);
   padding: 0 10px;
   font-weight: 700;
 }
 
+.sheet-input::placeholder {
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .sheet-input:focus {
-  outline: 2px solid rgba(31, 122, 92, 0.22);
+  outline: none;
+  box-shadow: var(--focus-ring);
   border-color: var(--accent);
 }
 
@@ -684,7 +950,7 @@ button {
 .sheet-wrap {
   max-height: 270px;
   overflow: auto;
-  background: #ffffff;
+  background: var(--panel-bg);
 }
 
 .song-sheet {
@@ -697,8 +963,8 @@ button {
 
 .song-sheet th,
 .song-sheet td {
-  border-right: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
   padding: 5px;
   vertical-align: middle;
 }
@@ -707,10 +973,12 @@ button {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #eef4f1;
+  background: var(--panel-bg-3);
   color: var(--accent-strong);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   text-align: left;
 }
 
@@ -747,8 +1015,8 @@ button {
 }
 
 .danger-button {
-  color: #b3261e;
-  border-color: #e2b8b5;
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
 }
 
 .song-sheet tr.is-selected td {
@@ -768,7 +1036,7 @@ button {
 }
 
 .song-sheet tr.is-selected .sheet-cell-input {
-  background: rgba(255, 255, 255, 0.72);
+  background: color-mix(in srgb, var(--panel-bg) 72%, transparent);
 }
 
 .row-actions,
@@ -785,7 +1053,7 @@ button {
   padding: 0 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #f8faf9;
+  background: var(--panel-bg-2);
   color: var(--ink);
   cursor: pointer;
   font-size: 12px;
@@ -797,9 +1065,19 @@ button {
 }
 
 .mini-button:disabled {
-  color: #9aa5a0;
+  color: var(--muted);
+  opacity: 0.55;
   cursor: not-allowed;
 }
+
+.empty-sheet-cell {
+  height: 54px;
+  color: var(--muted);
+  font-weight: 800;
+  text-align: center;
+}
+
+/* ---------------- YouTube panel ---------------- */
 
 .youtube-panel {
   display: grid;
@@ -821,7 +1099,7 @@ button {
 }
 
 .selected-song-key {
-  color: #b3261e;
+  color: var(--warn);
   font-weight: 900;
   white-space: nowrap;
 }
@@ -847,8 +1125,8 @@ button {
   aspect-ratio: 16 / 9;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #101615;
+  border-radius: var(--radius);
+  background: #0a0a0a;
 }
 
 .youtube-player-placeholder,
@@ -870,9 +1148,9 @@ button {
 }
 
 .primary-button {
-  background: var(--accent);
-  border-color: var(--accent-strong);
-  color: #ffffff;
+  background: linear-gradient(150deg, var(--accent), var(--accent-deep));
+  border-color: transparent;
+  color: var(--accent-contrast);
 }
 
 .seek-field {
@@ -891,6 +1169,102 @@ button {
   min-height: 34px;
   text-align: center;
 }
+
+/* ---------------- Skidanje (labs) & Ucenje tabs ---------------- */
+
+.tab-intro {
+  padding: 18px 14px 0;
+}
+
+.tab-intro h2 {
+  margin: 0 0 4px;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+
+.tab-intro p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  max-width: 62ch;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.feature-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+a.feature-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.feature-card .fc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.feature-card .fc-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.feature-card h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.feature-card p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.badge.live {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.badge.soon {
+  background: var(--panel-bg-2);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+/* ---------------- Responsive ---------------- */
+
 @media (hover: none), (pointer: coarse), (max-width: 760px) {
   :root {
     --white-w: 38px;
@@ -898,8 +1272,24 @@ button {
     --keyboard-h: 260px;
   }
 
-  .app-shell {
-    grid-template-rows: auto auto auto auto;
+  .appbar {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .brand-sub {
+    display: none;
+  }
+
+  .app-tabs {
+    order: 3;
+    width: 100%;
+  }
+
+  .app-tabs button {
+    flex: 1 1 0;
+    padding: 8px 6px;
+    font-size: 12.5px;
   }
 
   .topbar {
@@ -999,7 +1389,34 @@ button {
   }
 
   .piano-scroll {
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
+    padding: 6px 6px 8px;
+  }
+
+  .repertoire-panel {
+    padding: 10px 8px 12px;
+  }
+
+  .repertoire-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .song-form {
+    grid-template-columns: 1fr 110px;
+  }
+
+  .song-form .url-input,
+  .song-form #addSongButton {
+    grid-column: 1 / -1;
+  }
+
+  .youtube-controls {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .seek-field {
+    grid-column: 1 / -1;
+    justify-content: start;
   }
 }
 
@@ -1037,45 +1454,6 @@ button {
   }
 }
 
-.empty-sheet-cell {
-  height: 54px;
-  color: var(--muted);
-  font-weight: 800;
-  text-align: center;
-}
-@media (hover: none), (pointer: coarse), (max-width: 760px) {
-  .repertoire-panel {
-    padding: 0 8px 12px;
-  }
-
-  .repertoire-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .song-form {
-    grid-template-columns: 1fr 110px;
-  }
-
-  .song-form .url-input,
-  .song-form #addSongButton {
-    grid-column: 1 / -1;
-  }
-
-  .youtube-controls {
-    grid-template-columns: repeat(4, 1fr);
-  }
-
-  .seek-field {
-    grid-column: 1 / -1;
-    justify-content: start;
-  }
-}
 .double-tap-control .mini-slider {
   width: 112px;
-}
-.repertoire-file-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
 }

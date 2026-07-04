@@ -1,261 +1,374 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="sr">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#1f7a5c">
-    <title>PWA Klavir</title>
+    <meta name="theme-color" content="#141009">
+    <title>FGR — Klavir · Repertoar · Harmonija</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <link rel="stylesheet" href="styles.css?v=64">
+    <script>
+      (function () {
+        var theme = "dark";
+        try {
+          var saved = JSON.parse(localStorage.getItem("fgr-ui-v1") || "{}").theme;
+          if (saved === "light" || saved === "dark") theme = saved;
+        } catch (e) {}
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+    <link rel="stylesheet" href="styles.css?v=70">
   </head>
   <body>
-    <main id="app" class="app-shell" tabindex="0" aria-label="PWA klavir">
-      <header class="topbar">
-        <section class="toolbar-section sound-section" aria-label="Zvuk">
-          <span class="toolbar-title">Zvuk</span>
-          <div class="toolbar-controls">
-            <section class="control-group volume-control" aria-label="Jacina zvuka">
-              <span class="control-label">Jacina</span>
-              <input id="volumeControl" class="volume-slider" type="range" min="0" max="100" value="70" aria-label="Jacina zvuka">
-            </section>
-
-            <section class="control-group sound-control" aria-label="Izbor zvuka">
-              <label class="select-label" for="instrumentSelect">Instrument</label>
-              <select id="instrumentSelect" class="sound-select">
-                <option value="grand-piano" selected>Grand piano</option>
-                <option value="choir">Hor</option>
-                <option value="warm-synth">Warm synth</option>
-                <option value="accordion">Harmonika</option>
-                <option value="organ">Organ</option>
-                <option value="guitar">Gitara</option>
-                <option value="trumpet">Truba</option>
-                <option value="brass">Brass</option>
-              </select>
-            </section>
-
-            <section class="control-group sustain-control" aria-label="Sustain">
-              <label class="toggle-row">
-                <input id="sustainToggle" type="checkbox">
-                <span>Sustain</span>
-              </label>
-            </section>
-
-            <section class="control-group sustain-length-control" aria-label="Duzina sustaina">
-              <label class="select-label" for="sustainLengthControl">Trajanje</label>
-              <input id="sustainLengthControl" class="mini-slider" type="range" min="0.2" max="8.1" step="0.1" value="2.5">
-              <output id="sustainLengthDisplay" class="mini-output">2.5s</output>
-            </section>
+    <main id="app" class="app-shell" tabindex="0" aria-label="FGR aplikacija">
+      <header class="appbar">
+        <div class="brand">
+          <span class="brand-logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="3.5" width="16" height="17" rx="3" fill="rgba(0,0,0,.14)" stroke="rgba(255,255,255,.55)" stroke-width="1.2"/><path d="M8.5 3.5v10M12 3.5v10M15.5 3.5v10" stroke="rgba(255,255,255,.65)" stroke-width="1"/><rect x="6.5" y="13" width="11" height="7.2" rx="1.4" fill="rgba(255,255,255,.92)"/></svg>
+          </span>
+          <div>
+            <h1>FGR</h1>
+            <span class="brand-sub">Klavir &middot; Repertoar &middot; Harmonija</span>
           </div>
-        </section>
+        </div>
 
-        <section class="toolbar-section play-section" aria-label="Sviranje">
-          <span class="toolbar-title">Sviranje</span>
-          <div class="toolbar-controls">
-            <section class="control-group octave-control" aria-label="Izbor oktave">
-              <button id="octaveDown" class="text-button" type="button">Oktava -</button>
-              <output id="octaveDisplay" class="status-pill" aria-live="polite">Oktava: 4</output>
-              <button id="octaveUp" class="text-button" type="button">Oktava +</button>
-            </section>
+        <nav class="app-tabs" role="tablist" aria-label="Sekcije aplikacije">
+          <button type="button" role="tab" data-tab="sviranje" aria-selected="true">Sviranje</button>
+          <button type="button" role="tab" data-tab="repertoar" aria-selected="false">Repertoar</button>
+          <button type="button" role="tab" data-tab="skidanje" aria-selected="false">Skidanje</button>
+          <button type="button" role="tab" data-tab="ucenje" aria-selected="false">U&#269;enje</button>
+        </nav>
 
-            <section class="control-group desktop-click-control" aria-label="Desktop klik mod">
-              <span class="control-label">Klik</span>
-              <div class="segmented compact" role="radiogroup" aria-label="Desktop klik mod">
-                <label>
-                  <input type="radio" name="desktopMouseMode" value="tone" checked>
-                  <span>Ton</span>
-                </label>
-                <label>
-                  <input type="radio" name="desktopMouseMode" value="chord">
-                  <span>Akord</span>
-                </label>
-              </div>
-            </section>
-
-            <section class="control-group desktop-keyboard-control" aria-label="Tastatura kao klavir">
-              <label class="toggle-row">
-                <input id="pianoKeyboardToggle" type="checkbox">
-                <span>Tastatura: dugmetara</span>
-              </label>
-            </section>
-
-            <section class="control-group desktop-keyboard-control" aria-label="Broj redova dugmetare">
-              <span class="control-label">Redovi</span>
-              <div class="segmented compact" role="radiogroup" aria-label="Broj redova dugmetare">
-                <label>
-                  <input type="radio" name="dugmetaraRows" value="3">
-                  <span>3</span>
-                </label>
-                <label>
-                  <input type="radio" name="dugmetaraRows" value="4" checked>
-                  <span>4</span>
-                </label>
-              </div>
-            </section>
-
-            <section class="control-group labels-control" aria-label="Nazivi tonova">
-              <label class="toggle-row">
-                <input id="labelsToggle" type="checkbox" checked>
-                <span>Nazivi tonova</span>
-              </label>
-            </section>
-          </div>
-        </section>
-
-        <section class="toolbar-section chord-section" aria-label="Akordi">
-          <span class="toolbar-title">Akordi</span>
-          <div class="toolbar-controls">
-            <section class="control-group desktop-keyboard-control" aria-label="Polozaj sedmice i devetke">
-              <span class="control-label">7/9</span>
-              <div class="segmented compact" role="radiogroup" aria-label="Polozaj dodatnih tonova">
-                <label>
-                  <input type="radio" name="extensionVoicing" value="upper" checked>
-                  <span>Gornja</span>
-                </label>
-                <label>
-                  <input type="radio" name="extensionVoicing" value="left">
-                  <span>Donja</span>
-                </label>
-              </div>
-            </section>
-
-            <section class="control-group desktop-keyboard-control" aria-label="Bliski hvatovi">
-              <label class="toggle-row">
-                <input id="closeVoicingToggle" type="checkbox">
-                <span>Bliski hvatovi</span>
-              </label>
-            </section>
-
-            <section class="control-group desktop-keyboard-control" aria-label="Sedmica i devetka bez osnove">
-              <label class="toggle-row">
-                <input id="omitExtensionRootToggle" type="checkbox">
-                <span>7/9 bez osnove</span>
-              </label>
-            </section>
-
-            <section class="control-group desktop-keyboard-control" aria-label="Ponovi akord na promenu">
-              <label class="toggle-row">
-                <input id="retriggerChordToggle" type="checkbox" checked>
-                <span>Ponovi na promenu</span>
-              </label>
-            </section>
-
-            <section class="control-group desktop-keyboard-control double-tap-control" aria-label="Dupli pritisak za povisene akorde">
-              <label class="select-label" for="doubleTapSharpControl">Dupli Cis</label>
-              <input id="doubleTapSharpControl" class="mini-slider" type="range" min="30" max="250" step="10" value="90">
-              <output id="doubleTapSharpDisplay" class="mini-output">90ms</output>
-            </section>
-
-            <section class="control-group desktop-keyboard-control" aria-label="Reset memorije akorda">
-              <button id="resetMemoryButton" class="text-button" type="button">Reset memorije</button>
-            </section>
-
-            <section class="control-group active-chord" aria-label="Trenutni akord">
-              <span class="control-label">Svira se</span>
-              <output id="activeChordDisplay" aria-live="polite">-</output>
-            </section>
-          </div>
-        </section>
+        <div class="appbar-actions">
+          <button id="themeToggle" class="icon-button" type="button" aria-label="Promeni temu" title="Tema">
+            <svg id="themeToggleIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          </button>
+          <button id="settingsToggle" class="icon-button" type="button" aria-label="Pode&#353;avanja" title="Pode&#353;avanja" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.98 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.98a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09c0 .68.4 1.3 1.03 1.56a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.02c.26.63.88 1.03 1.56 1.03H21a2 2 0 1 1 0 4h-.09c-.68 0-1.3.4-1.51 1.03z"/></svg>
+          </button>
+        </div>
       </header>
 
-      <section id="mobileControls" class="mobile-controls" aria-label="Mobilne kontrole">
-        <div class="segmented" role="radiogroup" aria-label="Mod sviranja">
-          <label>
-            <input type="radio" name="mobileMode" value="tone" checked>
-            <span>Ton</span>
-          </label>
-          <label>
-            <input type="radio" name="mobileMode" value="chord">
-            <span>Akord</span>
-          </label>
-        </div>
-
-        <div class="mobile-modifiers" aria-label="Obrtaji i mol">
-          <button class="modifier-button" data-mobile-modifier="left" type="button" aria-label="Levi obrtaj">&larr;</button>
-          <button class="modifier-button modifier-minor" data-mobile-modifier="minor" type="button">mol</button>
-          <button class="modifier-button" data-mobile-modifier="right" type="button" aria-label="Desni obrtaj">&rarr;</button>
-        </div>
-      </section>
-
-      <section class="piano-area" aria-label="Klavirska tastatura">
-        <div id="pianoScroll" class="piano-scroll">
-          <div id="keyboard" class="keyboard" role="group" aria-label="Klavirske dirke"></div>
-        </div>
-      </section>
-
-      <section id="repertoirePanel" class="repertoire-panel" aria-label="Playlist">
-        <div id="playlistStart" class="playlist-start">
-          <h2>Playlist</h2>
-          <div class="playlist-start-actions">
-            <button id="startLoadPlaylistButton" class="text-button" type="button">Load</button>
-            <button id="startNewPlaylistButton" class="text-button" type="button">New</button>
+      <section id="settingsPanel" class="settings-panel" aria-label="Pode&#353;avanja" hidden>
+        <div class="settings-group">
+          <span class="control-label">Tema</span>
+          <div class="segmented compact" role="radiogroup" aria-label="Izbor teme">
+            <label>
+              <input type="radio" name="uiTheme" value="dark" checked>
+              <span>Tamna</span>
+            </label>
+            <label>
+              <input type="radio" name="uiTheme" value="light">
+              <span>Svetla</span>
+            </label>
           </div>
         </div>
+        <span class="settings-note">Jo&#353; pode&#353;avanja sti&#382;e: nazivi nota, veli&#269;ina klavira, palete&hellip;</span>
+      </section>
 
-        <div id="playlistWorkspace" class="repertoire-layout" hidden>
-          <section class="repertoire-sheet" aria-label="Playlist pesama">
-            <div class="repertoire-topline">
-              <h2>Playlist</h2>
-              <div class="repertoire-search" role="search">
-                <input id="songSearchInput" class="sheet-input search-input" type="search" autocomplete="off" placeholder="Pretraga pesme" aria-label="Pretraga pesme">
-                <button id="songSearchButton" class="text-button" type="button">Trazi</button>
-              </div>
-              <div class="repertoire-file-controls playlist-controls" aria-label="Playlist JSON">
-                <button id="loadPlaylistButton" class="text-button" type="button">Load</button>
-                <button id="newPlaylistButton" class="text-button" type="button">New</button>
-              </div>
-              <output id="youtubeStatus" class="repertoire-status" aria-live="polite">Spreman</output>
-            </div>
+      <!-- ======================= TAB: SVIRANJE ======================= -->
+      <section class="tab-panel" data-panel="sviranje" role="tabpanel" aria-label="Sviranje">
+        <header class="topbar">
+          <section class="toolbar-section sound-section" aria-label="Zvuk">
+            <span class="toolbar-title">Zvuk</span>
+            <div class="toolbar-controls">
+              <section class="control-group volume-control" aria-label="Jacina zvuka">
+                <span class="control-label">Jacina</span>
+                <input id="volumeControl" class="volume-slider" type="range" min="0" max="100" value="70" aria-label="Jacina zvuka">
+              </section>
 
-            <div class="song-form" aria-label="Dodaj pesmu">
-              <input id="songTitleInput" class="sheet-input" type="text" autocomplete="off" placeholder="Pesma" aria-label="Naziv pesme">
-              <input id="songKeyInput" class="sheet-input key-input" type="text" autocomplete="off" placeholder="Tonalitet" aria-label="Tonalitet">
-              <input id="songUrlInput" class="sheet-input url-input" type="url" autocomplete="off" placeholder="YouTube link" aria-label="YouTube link">
-              <button id="addSongButton" class="text-button" type="button">Dodaj</button>
-            </div>
+              <section class="control-group sound-control" aria-label="Izbor zvuka">
+                <label class="select-label" for="instrumentSelect">Instrument</label>
+                <select id="instrumentSelect" class="sound-select">
+                  <option value="grand-piano" selected>Grand piano</option>
+                  <option value="choir">Hor</option>
+                  <option value="warm-synth">Warm synth</option>
+                  <option value="accordion">Harmonika</option>
+                  <option value="organ">Organ</option>
+                  <option value="guitar">Gitara</option>
+                  <option value="trumpet">Truba</option>
+                  <option value="brass">Brass</option>
+                </select>
+              </section>
 
-            <div class="sheet-wrap" role="region" aria-label="Tabela repertoara" tabindex="0">
-              <table class="song-sheet">
-                <thead>
-                  <tr>
-                    <th scope="col">#</th>
-                    <th scope="col">Pesma</th>
-                    <th scope="col">Tonalitet</th>
-                    <th scope="col">YouTube</th>
-                    <th scope="col">Akcija</th>
-                  </tr>
-                </thead>
-                <tbody id="repertoireTableBody"></tbody>
-              </table>
+              <section class="control-group sustain-control" aria-label="Sustain">
+                <label class="toggle-row">
+                  <input id="sustainToggle" type="checkbox">
+                  <span>Sustain</span>
+                </label>
+              </section>
+
+              <section class="control-group sustain-length-control" aria-label="Duzina sustaina">
+                <label class="select-label" for="sustainLengthControl">Trajanje</label>
+                <input id="sustainLengthControl" class="mini-slider" type="range" min="0.2" max="8.1" step="0.1" value="2.5">
+                <output id="sustainLengthDisplay" class="mini-output">2.5s</output>
+              </section>
             </div>
           </section>
 
-          <aside class="youtube-panel" aria-label="YouTube player">
-            <div class="selected-song-panel">
-              <div class="selected-song-title-row">
-                <span class="control-label">Pesma</span>
-                <output id="selectedSongTitle">-</output>
-                <output id="selectedSongKeyDisplay" class="selected-song-key"></output>
+          <section class="toolbar-section play-section" aria-label="Sviranje">
+            <span class="toolbar-title">Sviranje</span>
+            <div class="toolbar-controls">
+              <section class="control-group octave-control" aria-label="Izbor oktave">
+                <button id="octaveDown" class="text-button" type="button">Oktava -</button>
+                <output id="octaveDisplay" class="status-pill" aria-live="polite">Oktava: 4</output>
+                <button id="octaveUp" class="text-button" type="button">Oktava +</button>
+              </section>
+
+              <section class="control-group desktop-click-control" aria-label="Desktop klik mod">
+                <span class="control-label">Klik</span>
+                <div class="segmented compact" role="radiogroup" aria-label="Desktop klik mod">
+                  <label>
+                    <input type="radio" name="desktopMouseMode" value="tone" checked>
+                    <span>Ton</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="desktopMouseMode" value="chord">
+                    <span>Akord</span>
+                  </label>
+                </div>
+              </section>
+
+              <section class="control-group desktop-keyboard-control" aria-label="Tastatura kao klavir">
+                <label class="toggle-row">
+                  <input id="pianoKeyboardToggle" type="checkbox">
+                  <span>Tastatura: dugmetara</span>
+                </label>
+              </section>
+
+              <section class="control-group desktop-keyboard-control" aria-label="Broj redova dugmetare">
+                <span class="control-label">Redovi</span>
+                <div class="segmented compact" role="radiogroup" aria-label="Broj redova dugmetare">
+                  <label>
+                    <input type="radio" name="dugmetaraRows" value="3">
+                    <span>3</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="dugmetaraRows" value="4" checked>
+                    <span>4</span>
+                  </label>
+                </div>
+              </section>
+
+              <section class="control-group labels-control" aria-label="Nazivi tonova">
+                <label class="toggle-row">
+                  <input id="labelsToggle" type="checkbox" checked>
+                  <span>Nazivi tonova</span>
+                </label>
+              </section>
+            </div>
+          </section>
+
+          <section class="toolbar-section chord-section" aria-label="Akordi">
+            <span class="toolbar-title">Akordi</span>
+            <div class="toolbar-controls">
+              <section class="control-group desktop-keyboard-control" aria-label="Polozaj sedmice i devetke">
+                <span class="control-label">7/9</span>
+                <div class="segmented compact" role="radiogroup" aria-label="Polozaj dodatnih tonova">
+                  <label>
+                    <input type="radio" name="extensionVoicing" value="upper" checked>
+                    <span>Gornja</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="extensionVoicing" value="left">
+                    <span>Donja</span>
+                  </label>
+                </div>
+              </section>
+
+              <section class="control-group desktop-keyboard-control" aria-label="Bliski hvatovi">
+                <label class="toggle-row">
+                  <input id="closeVoicingToggle" type="checkbox">
+                  <span>Bliski hvatovi</span>
+                </label>
+              </section>
+
+              <section class="control-group desktop-keyboard-control" aria-label="Sedmica i devetka bez osnove">
+                <label class="toggle-row">
+                  <input id="omitExtensionRootToggle" type="checkbox">
+                  <span>7/9 bez osnove</span>
+                </label>
+              </section>
+
+              <section class="control-group desktop-keyboard-control" aria-label="Ponovi akord na promenu">
+                <label class="toggle-row">
+                  <input id="retriggerChordToggle" type="checkbox" checked>
+                  <span>Ponovi na promenu</span>
+                </label>
+              </section>
+
+              <section class="control-group desktop-keyboard-control double-tap-control" aria-label="Dupli pritisak za povisene akorde">
+                <label class="select-label" for="doubleTapSharpControl">Dupli Cis</label>
+                <input id="doubleTapSharpControl" class="mini-slider" type="range" min="30" max="250" step="10" value="90">
+                <output id="doubleTapSharpDisplay" class="mini-output">90ms</output>
+              </section>
+
+              <section class="control-group desktop-keyboard-control" aria-label="Reset memorije akorda">
+                <button id="resetMemoryButton" class="text-button" type="button">Reset memorije</button>
+              </section>
+
+              <section class="control-group active-chord" aria-label="Trenutni akord">
+                <span class="control-label">Svira se</span>
+                <output id="activeChordDisplay" aria-live="polite">-</output>
+              </section>
+            </div>
+          </section>
+        </header>
+
+        <section id="mobileControls" class="mobile-controls" aria-label="Mobilne kontrole">
+          <div class="segmented" role="radiogroup" aria-label="Mod sviranja">
+            <label>
+              <input type="radio" name="mobileMode" value="tone" checked>
+              <span>Ton</span>
+            </label>
+            <label>
+              <input type="radio" name="mobileMode" value="chord">
+              <span>Akord</span>
+            </label>
+          </div>
+
+          <div class="mobile-modifiers" aria-label="Obrtaji i mol">
+            <button class="modifier-button" data-mobile-modifier="left" type="button" aria-label="Levi obrtaj">&larr;</button>
+            <button class="modifier-button modifier-minor" data-mobile-modifier="minor" type="button">mol</button>
+            <button class="modifier-button" data-mobile-modifier="right" type="button" aria-label="Desni obrtaj">&rarr;</button>
+          </div>
+        </section>
+
+        <section class="piano-area" aria-label="Klavirska tastatura">
+          <div id="pianoScroll" class="piano-scroll">
+            <div id="keyboard" class="keyboard" role="group" aria-label="Klavirske dirke"></div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ======================= TAB: REPERTOAR ======================= -->
+      <section class="tab-panel" data-panel="repertoar" role="tabpanel" aria-label="Repertoar" hidden>
+        <section id="repertoirePanel" class="repertoire-panel" aria-label="Playlist">
+          <div id="playlistStart" class="playlist-start">
+            <h2>Playlist</h2>
+            <div class="playlist-start-actions">
+              <button id="startLoadPlaylistButton" class="text-button" type="button">Load</button>
+              <button id="startNewPlaylistButton" class="text-button" type="button">New</button>
+            </div>
+          </div>
+
+          <div id="playlistWorkspace" class="repertoire-layout" hidden>
+            <section class="repertoire-sheet" aria-label="Playlist pesama">
+              <div class="repertoire-topline">
+                <h2>Playlist</h2>
+                <div class="repertoire-search" role="search">
+                  <input id="songSearchInput" class="sheet-input search-input" type="search" autocomplete="off" placeholder="Pretraga pesme" aria-label="Pretraga pesme">
+                  <button id="songSearchButton" class="text-button" type="button">Trazi</button>
+                </div>
+                <div class="repertoire-file-controls playlist-controls" aria-label="Playlist JSON">
+                  <button id="loadPlaylistButton" class="text-button" type="button">Load</button>
+                  <button id="newPlaylistButton" class="text-button" type="button">New</button>
+                </div>
+                <output id="youtubeStatus" class="repertoire-status" aria-live="polite">Spreman</output>
               </div>
-            </div>
 
-            <div class="youtube-frame-shell">
-              <div id="youtubePlayer" class="youtube-player-placeholder">YouTube</div>
-            </div>
+              <div class="song-form" aria-label="Dodaj pesmu">
+                <input id="songTitleInput" class="sheet-input" type="text" autocomplete="off" placeholder="Pesma" aria-label="Naziv pesme">
+                <input id="songKeyInput" class="sheet-input key-input" type="text" autocomplete="off" placeholder="Tonalitet" aria-label="Tonalitet">
+                <input id="songUrlInput" class="sheet-input url-input" type="url" autocomplete="off" placeholder="YouTube link" aria-label="YouTube link">
+                <button id="addSongButton" class="text-button" type="button">Dodaj</button>
+              </div>
 
-            <div class="youtube-controls" aria-label="Kontrole YouTube playera">
-              <button id="youtubeRewind" class="text-button" type="button">-10s</button>
-              <button id="youtubePlayPause" class="text-button primary-button" type="button">Pusti</button>
-              <button id="youtubeForward" class="text-button" type="button">+10s</button>
-              <button id="youtubeOpenExternal" class="text-button" type="button">Otvori</button>
-              <label class="seek-field">
-                <span>Premotaj</span>
-                <input id="youtubeSeekSeconds" class="sheet-input seek-input" type="number" min="1" max="60" step="1" value="10" aria-label="Sekunde premotavanja">
-                <span>s</span>
-              </label>
-            </div>
-          </aside>
+              <div class="sheet-wrap" role="region" aria-label="Tabela repertoara" tabindex="0">
+                <table class="song-sheet">
+                  <thead>
+                    <tr>
+                      <th scope="col">#</th>
+                      <th scope="col">Pesma</th>
+                      <th scope="col">Tonalitet</th>
+                      <th scope="col">YouTube</th>
+                      <th scope="col">Akcija</th>
+                    </tr>
+                  </thead>
+                  <tbody id="repertoireTableBody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <aside class="youtube-panel" aria-label="YouTube player">
+              <div class="selected-song-panel">
+                <div class="selected-song-title-row">
+                  <span class="control-label">Pesma</span>
+                  <output id="selectedSongTitle">-</output>
+                  <output id="selectedSongKeyDisplay" class="selected-song-key"></output>
+                </div>
+              </div>
+
+              <div class="youtube-frame-shell">
+                <div id="youtubePlayer" class="youtube-player-placeholder">YouTube</div>
+              </div>
+
+              <div class="youtube-controls" aria-label="Kontrole YouTube playera">
+                <button id="youtubeRewind" class="text-button" type="button">-10s</button>
+                <button id="youtubePlayPause" class="text-button primary-button" type="button">Pusti</button>
+                <button id="youtubeForward" class="text-button" type="button">+10s</button>
+                <button id="youtubeOpenExternal" class="text-button" type="button">Otvori</button>
+                <label class="seek-field">
+                  <span>Premotaj</span>
+                  <input id="youtubeSeekSeconds" class="sheet-input seek-input" type="number" min="1" max="60" step="1" value="10" aria-label="Sekunde premotavanja">
+                  <span>s</span>
+                </label>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </section>
+
+      <!-- ======================= TAB: SKIDANJE ======================= -->
+      <section class="tab-panel" data-panel="skidanje" role="tabpanel" aria-label="Skidanje pesama" hidden>
+        <div class="tab-intro">
+          <h2>Skidanje pesama</h2>
+          <p>Alati za skidanje harmonije sa snimaka. Trenutno kao samostalne laboratorije &mdash; kad se dokazu, sele se ovde kao punopravni delovi aplikacije.</p>
+        </div>
+        <div class="card-grid">
+          <a class="feature-card" href="chord-lab.html">
+            <span class="fc-head"><span class="fc-icon">&#127925;</span><h3>Chord Lab</h3><span class="badge live">Prototip</span></span>
+            <p>Prepoznavanje akorda iz zvuka (podeli tab ili mikrofon). Hromagram + poklapanje &#353;ablona, sa upisom akorda u chord chart.</p>
+          </a>
+          <a class="feature-card" href="capture-lab.html">
+            <span class="fc-head"><span class="fc-icon">&#127908;</span><h3>Capture Lab</h3><span class="badge live">Prototip</span></span>
+            <p>Snimi ceo zvuk pesme i trajno ga zapamti u browseru. Osnova za razdvajanje kanala (bas, bubnjevi, harmonija, solo).</p>
+          </a>
+          <a class="feature-card" href="midi-lab.html">
+            <span class="fc-head"><span class="fc-icon">&#127929;</span><h3>MIDI Lab</h3><span class="badge live">Radi</span></span>
+            <p>Pove&#382;i pravu klavijaturu preko USB-a. Note i akordi se &#269;itaju 100% ta&#269;no direktno iz klavijature.</p>
+          </a>
+          <div class="feature-card">
+            <span class="fc-head"><span class="fc-icon">&#129692;</span><h3>Razdvajanje kanala</h3><span class="badge soon">U izradi</span></span>
+            <p>Bubnjevi &middot; bas &middot; harmonija &middot; solo, svaki kanal posebno. Radi u browseru (Demucs), analizira se jednom pa se pamti.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= TAB: UCENJE ======================= -->
+      <section class="tab-panel" data-panel="ucenje" role="tabpanel" aria-label="U&#269;enje" hidden>
+        <div class="tab-intro">
+          <h2>U&#269;enje harmonije</h2>
+          <p>Teorija koja se svira: akordi tonaliteta, kvintni krug, transpozicija preko stepeni i trena&#382;er skala &mdash; sve povezano sa klavirom iz aplikacije.</p>
+        </div>
+        <div class="card-grid">
+          <div class="feature-card">
+            <span class="fc-head"><span class="fc-icon">&#127900;</span><h3>Akordi tonaliteta</h3><span class="badge soon">Sledi prvo</span></span>
+            <p>Izaberi tonalitet i vidi njegove akorde po stepenima (i &middot; iv &middot; V&hellip;). Klik na akord &mdash; odsvira se na klaviru.</p>
+          </div>
+          <div class="feature-card">
+            <span class="fc-head"><span class="fc-icon">&#128260;</span><h3>Transpozicija</h3><span class="badge soon">U izradi</span></span>
+            <p>Nau&#269;io si pesmu u a-molu? Vidi iste stepene u fis-molu, d-molu&hellip; Oblik je isti, menja se samo osnova.</p>
+          </div>
+          <div class="feature-card">
+            <span class="fc-head"><span class="fc-icon">&#128303;</span><h3>Kvintni krug</h3><span class="badge soon">U izradi</span></span>
+            <p>Interaktivni krug tonaliteta: predznaci, paralelni molovi, susedni tonaliteti i tipi&#269;ne progresije.</p>
+          </div>
+          <div class="feature-card">
+            <span class="fc-head"><span class="fc-icon">&#127932;</span><h3>Trena&#382;er skala</h3><span class="badge soon">U izradi</span></span>
+            <p>Dur, molovi, pentatonika, blues, modusi i jazz skale &mdash; osvetljene na klaviru, uz vezbanje sa pratnjom.</p>
+          </div>
         </div>
       </section>
 
@@ -271,6 +384,7 @@
       </div>
     </main>
 
-    <script src="app.js?v=67" defer></script>
+    <script src="ui-shell.js?v=70" defer></script>
+    <script src="app.js?v=70" defer></script>
   </body>
 </html>
