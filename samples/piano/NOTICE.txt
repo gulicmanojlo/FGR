@@ -1,0 +1,5 @@
+Piano samples:
+@audio-samples/piano-mp3-velocity12 v1.0.5
+Salamander Grand Piano V3 MP3 samples
+Package license: MIT
+Original instrument samples: Salamander Grand Piano V3 by Alexander Holm

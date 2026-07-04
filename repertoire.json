@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "updatedAt": "",
+  "settings": {
+    "selectedSongId": "",
+    "seekSeconds": 10
+  },
+  "songs": []
+}

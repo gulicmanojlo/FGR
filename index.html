@@ -1,0 +1,244 @@
+﻿<!doctype html>
+<html lang="sr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#1f7a5c">
+    <title>PWA Klavir</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="stylesheet" href="styles.css?v=62">
+  </head>
+  <body>
+    <main id="app" class="app-shell" tabindex="0" aria-label="PWA klavir">
+      <header class="topbar">
+        <section class="toolbar-section sound-section" aria-label="Zvuk">
+          <span class="toolbar-title">Zvuk</span>
+          <div class="toolbar-controls">
+            <section class="control-group volume-control" aria-label="Jacina zvuka">
+              <span class="control-label">Jacina</span>
+              <input id="volumeControl" class="volume-slider" type="range" min="0" max="100" value="70" aria-label="Jacina zvuka">
+            </section>
+
+            <section class="control-group sound-control" aria-label="Izbor zvuka">
+              <label class="select-label" for="instrumentSelect">Instrument</label>
+              <select id="instrumentSelect" class="sound-select">
+                <option value="grand-piano" selected>Grand piano</option>
+                <option value="choir">Hor</option>
+                <option value="warm-synth">Warm synth</option>
+                <option value="accordion">Harmonika</option>
+                <option value="organ">Organ</option>
+                <option value="guitar">Gitara</option>
+                <option value="trumpet">Truba</option>
+                <option value="brass">Brass</option>
+              </select>
+            </section>
+
+            <section class="control-group sustain-control" aria-label="Sustain">
+              <label class="toggle-row">
+                <input id="sustainToggle" type="checkbox">
+                <span>Sustain</span>
+              </label>
+            </section>
+
+            <section class="control-group sustain-length-control" aria-label="Duzina sustaina">
+              <label class="select-label" for="sustainLengthControl">Trajanje</label>
+              <input id="sustainLengthControl" class="mini-slider" type="range" min="0.2" max="8.1" step="0.1" value="2.5">
+              <output id="sustainLengthDisplay" class="mini-output">2.5s</output>
+            </section>
+          </div>
+        </section>
+
+        <section class="toolbar-section play-section" aria-label="Sviranje">
+          <span class="toolbar-title">Sviranje</span>
+          <div class="toolbar-controls">
+            <section class="control-group octave-control" aria-label="Izbor oktave">
+              <button id="octaveDown" class="text-button" type="button">Oktava -</button>
+              <output id="octaveDisplay" class="status-pill" aria-live="polite">Oktava: 4</output>
+              <button id="octaveUp" class="text-button" type="button">Oktava +</button>
+            </section>
+
+            <section class="control-group desktop-click-control" aria-label="Desktop klik mod">
+              <span class="control-label">Klik</span>
+              <div class="segmented compact" role="radiogroup" aria-label="Desktop klik mod">
+                <label>
+                  <input type="radio" name="desktopMouseMode" value="tone" checked>
+                  <span>Ton</span>
+                </label>
+                <label>
+                  <input type="radio" name="desktopMouseMode" value="chord">
+                  <span>Akord</span>
+                </label>
+              </div>
+            </section>
+
+            <section class="control-group desktop-keyboard-control" aria-label="Tastatura kao klavir">
+              <label class="toggle-row">
+                <input id="pianoKeyboardToggle" type="checkbox">
+                <span>Tastatura: klavir</span>
+              </label>
+            </section>
+
+            <section class="control-group labels-control" aria-label="Nazivi tonova">
+              <label class="toggle-row">
+                <input id="labelsToggle" type="checkbox" checked>
+                <span>Nazivi tonova</span>
+              </label>
+            </section>
+          </div>
+        </section>
+
+        <section class="toolbar-section chord-section" aria-label="Akordi">
+          <span class="toolbar-title">Akordi</span>
+          <div class="toolbar-controls">
+            <section class="control-group desktop-keyboard-control" aria-label="Polozaj sedmice i devetke">
+              <span class="control-label">7/9</span>
+              <div class="segmented compact" role="radiogroup" aria-label="Polozaj dodatnih tonova">
+                <label>
+                  <input type="radio" name="extensionVoicing" value="upper" checked>
+                  <span>Gornja</span>
+                </label>
+                <label>
+                  <input type="radio" name="extensionVoicing" value="left">
+                  <span>Donja</span>
+                </label>
+              </div>
+            </section>
+
+            <section class="control-group desktop-keyboard-control" aria-label="Bliski hvatovi">
+              <label class="toggle-row">
+                <input id="closeVoicingToggle" type="checkbox">
+                <span>Bliski hvatovi</span>
+              </label>
+            </section>
+
+            <section class="control-group desktop-keyboard-control" aria-label="Sedmica i devetka bez osnove">
+              <label class="toggle-row">
+                <input id="omitExtensionRootToggle" type="checkbox">
+                <span>7/9 bez osnove</span>
+              </label>
+            </section>
+
+            <section class="control-group desktop-keyboard-control" aria-label="Ponovi akord na promenu">
+              <label class="toggle-row">
+                <input id="retriggerChordToggle" type="checkbox" checked>
+                <span>Ponovi na promenu</span>
+              </label>
+            </section>
+
+            <section class="control-group desktop-keyboard-control double-tap-control" aria-label="Dupli pritisak za povisene akorde">
+              <label class="select-label" for="doubleTapSharpControl">Dupli Cis</label>
+              <input id="doubleTapSharpControl" class="mini-slider" type="range" min="30" max="250" step="10" value="90">
+              <output id="doubleTapSharpDisplay" class="mini-output">90ms</output>
+            </section>
+
+            <section class="control-group desktop-keyboard-control" aria-label="Reset memorije akorda">
+              <button id="resetMemoryButton" class="text-button" type="button">Reset memorije</button>
+            </section>
+
+            <section class="control-group active-chord" aria-label="Trenutni akord">
+              <span class="control-label">Svira se</span>
+              <output id="activeChordDisplay" aria-live="polite">-</output>
+            </section>
+          </div>
+        </section>
+      </header>
+
+      <section id="mobileControls" class="mobile-controls" aria-label="Mobilne kontrole">
+        <div class="segmented" role="radiogroup" aria-label="Mod sviranja">
+          <label>
+            <input type="radio" name="mobileMode" value="tone" checked>
+            <span>Ton</span>
+          </label>
+          <label>
+            <input type="radio" name="mobileMode" value="chord">
+            <span>Akord</span>
+          </label>
+        </div>
+
+        <div class="mobile-modifiers" aria-label="Obrtaji i mol">
+          <button class="modifier-button" data-mobile-modifier="left" type="button" aria-label="Levi obrtaj">&larr;</button>
+          <button class="modifier-button modifier-minor" data-mobile-modifier="minor" type="button">mol</button>
+          <button class="modifier-button" data-mobile-modifier="right" type="button" aria-label="Desni obrtaj">&rarr;</button>
+        </div>
+      </section>
+
+      <section class="piano-area" aria-label="Klavirska tastatura">
+        <div id="pianoScroll" class="piano-scroll">
+          <div id="keyboard" class="keyboard" role="group" aria-label="Klavirske dirke"></div>
+        </div>
+      </section>
+
+      <section id="repertoirePanel" class="repertoire-panel" aria-label="Repertoar">
+        <div class="repertoire-layout">
+          <section class="repertoire-sheet" aria-label="Lista pesama">
+            <div class="repertoire-topline">
+              <h2>Repertoar</h2>
+              <div class="repertoire-search" role="search">
+                <input id="songSearchInput" class="sheet-input search-input" type="search" autocomplete="off" placeholder="Pretraga pesme" aria-label="Pretraga pesme">
+                <button id="songSearchButton" class="text-button" type="button">Trazi</button>
+              </div>
+              <div class="repertoire-file-controls" aria-label="Repertoar JSON fajl">
+                <button id="connectRepertoireFileButton" class="text-button" type="button">Povezi JSON</button>
+                <button id="exportRepertoireButton" class="text-button" type="button">Snimi JSON</button>
+                <input id="repertoireFileInput" type="file" accept=".json,application/json" hidden>
+              </div>
+              <output id="youtubeStatus" class="repertoire-status" aria-live="polite">Spreman</output>
+            </div>
+
+            <div class="song-form" aria-label="Dodaj pesmu">
+              <input id="songTitleInput" class="sheet-input" type="text" autocomplete="off" placeholder="Pesma" aria-label="Naziv pesme">
+              <input id="songKeyInput" class="sheet-input key-input" type="text" autocomplete="off" placeholder="Tonalitet" aria-label="Tonalitet">
+              <input id="songUrlInput" class="sheet-input url-input" type="url" autocomplete="off" placeholder="YouTube link" aria-label="YouTube link">
+              <button id="addSongButton" class="text-button" type="button">Dodaj</button>
+            </div>
+
+            <div class="sheet-wrap" role="region" aria-label="Tabela repertoara" tabindex="0">
+              <table class="song-sheet">
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Pesma</th>
+                    <th scope="col">Tonalitet</th>
+                    <th scope="col">YouTube</th>
+                    <th scope="col">Akcija</th>
+                  </tr>
+                </thead>
+                <tbody id="repertoireTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <aside class="youtube-panel" aria-label="YouTube player">
+            <div class="selected-song-panel">
+              <div class="selected-song-title-row">
+                <span class="control-label">Pesma</span>
+                <output id="selectedSongTitle">-</output>
+                <output id="selectedSongKeyDisplay" class="selected-song-key"></output>
+              </div>
+            </div>
+
+            <div class="youtube-frame-shell">
+              <div id="youtubePlayer" class="youtube-player-placeholder">YouTube</div>
+            </div>
+
+            <div class="youtube-controls" aria-label="Kontrole YouTube playera">
+              <button id="youtubeRewind" class="text-button" type="button">-10s</button>
+              <button id="youtubePlayPause" class="text-button primary-button" type="button">Pusti</button>
+              <button id="youtubeForward" class="text-button" type="button">+10s</button>
+              <button id="youtubeOpenExternal" class="text-button" type="button">Otvori</button>
+              <label class="seek-field">
+                <span>Premotaj</span>
+                <input id="youtubeSeekSeconds" class="sheet-input seek-input" type="number" min="1" max="60" step="1" value="10" aria-label="Sekunde premotavanja">
+                <span>s</span>
+              </label>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js?v=62" defer></script>
+  </body>
+</html>

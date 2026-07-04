@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PWA Klavir ikona">
+  <rect width="512" height="512" rx="96" fill="#1f7a5c"/>
+  <rect x="72" y="150" width="368" height="224" rx="24" fill="#fffdf8"/>
+  <path d="M72 150h368v70H72z" fill="#dff3ec"/>
+  <g fill="#191c1b">
+    <rect x="116" y="150" width="34" height="138" rx="10"/>
+    <rect x="168" y="150" width="34" height="138" rx="10"/>
+    <rect x="272" y="150" width="34" height="138" rx="10"/>
+    <rect x="324" y="150" width="34" height="138" rx="10"/>
+    <rect x="376" y="150" width="34" height="138" rx="10"/>
+  </g>
+  <g stroke="#1f7a5c" stroke-width="10">
+    <path d="M124 220v154"/>
+    <path d="M176 220v154"/>
+    <path d="M230 150v224"/>
+    <path d="M282 220v154"/>
+    <path d="M334 220v154"/>
+    <path d="M386 220v154"/>
+  </g>
+  <path d="M160 410h192" stroke="#fffdf8" stroke-width="28" stroke-linecap="round"/>
+</svg>

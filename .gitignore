@@ -1,0 +1,22 @@
+﻿
+# Local/system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor and app scratch files
+.vscode/
+.idea/
+.codex/
+.agents/
+
+# Logs and temporary output
+*.log
+*.tmp
+tmp/
+temp/
+
+# Dependencies/build output if added later
+node_modules/
+dist/
+build/
