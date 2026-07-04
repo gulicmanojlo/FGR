@@ -338,6 +338,8 @@
     activeMidiSet: new Set(),
     activeChordText: "-",
     keyElementsByMidi: new Map(),
+    keyboardWhiteCount: 0,
+    keyboardResizeObserver: null,
     desktopMouseMode: "tone",
     repertoire: [],
     activePlaylistName: "",
@@ -1827,6 +1829,7 @@
       key.append(label);
 
       key.addEventListener("pointerdown", handlePianoPointerDown);
+      key.addEventListener("pointermove", handlePianoPointerMove);
       key.addEventListener("pointerup", handlePianoPointerUp);
       key.addEventListener("pointercancel", handlePianoPointerUp);
       key.addEventListener("lostpointercapture", handlePianoPointerUp);
@@ -1836,9 +1839,48 @@
       fragment.append(key);
     }
 
+    state.keyboardWhiteCount = whiteIndex;
     keyboard.style.setProperty("--white-count", String(whiteIndex));
     keyboard.append(fragment);
+    fitKeyboardToContainer();
+    observeKeyboardResize();
     requestAnimationFrame(() => scrollToBaseOctave(false));
+  }
+
+  function fitKeyboardToContainer() {
+    if (!state.keyboardWhiteCount || !pianoScroll.clientWidth) {
+      return;
+    }
+
+    const baseWhiteWidth = getBaseWhiteKeyWidth();
+    const baseBlackWidth = getBaseBlackKeyWidth();
+    const fittedWhiteWidth = Math.max(baseWhiteWidth, pianoScroll.clientWidth / state.keyboardWhiteCount);
+    const fittedBlackWidth = fittedWhiteWidth * (baseBlackWidth / baseWhiteWidth);
+    keyboard.style.setProperty("--white-w", `${fittedWhiteWidth}px`);
+    keyboard.style.setProperty("--black-w", `${fittedBlackWidth}px`);
+  }
+
+  function getBaseWhiteKeyWidth() {
+    const rootValue = getComputedStyle(document.documentElement).getPropertyValue("--white-w");
+    const parsed = Number.parseFloat(rootValue);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 48;
+  }
+
+  function getBaseBlackKeyWidth() {
+    const rootValue = getComputedStyle(document.documentElement).getPropertyValue("--black-w");
+    const parsed = Number.parseFloat(rootValue);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+  }
+
+  function observeKeyboardResize() {
+    if (state.keyboardResizeObserver || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    state.keyboardResizeObserver = new ResizeObserver(() => {
+      fitKeyboardToContainer();
+    });
+    state.keyboardResizeObserver.observe(pianoScroll);
   }
 
   function handlePianoPointerDown(event) {
@@ -1872,6 +1914,52 @@
     }
 
     recomputeSound();
+  }
+
+  function handlePianoPointerMove(event) {
+    if (
+      !state.heldPointerTones.has(event.pointerId) &&
+      !state.heldMouseChordRoots.has(event.pointerId) &&
+      !state.heldMobileChordRoots.has(event.pointerId)
+    ) {
+      return;
+    }
+
+    const key = getPianoKeyFromPoint(event.clientX, event.clientY);
+    if (!key) {
+      return;
+    }
+
+    const midi = Number(key.dataset.midi);
+    let changed = false;
+
+    if (state.heldPointerTones.has(event.pointerId) && state.heldPointerTones.get(event.pointerId) !== midi) {
+      state.heldPointerTones.set(event.pointerId, midi);
+      changed = true;
+    }
+
+    const mouseChordRoot = state.heldMouseChordRoots.get(event.pointerId);
+    if (mouseChordRoot && mouseChordRoot.midi !== midi) {
+      mouseChordRoot.midi = midi;
+      changed = true;
+    }
+
+    const mobileChordRoot = state.heldMobileChordRoots.get(event.pointerId);
+    if (mobileChordRoot && mobileChordRoot.midi !== midi) {
+      mobileChordRoot.midi = midi;
+      changed = true;
+    }
+
+    if (changed) {
+      event.preventDefault();
+      recomputeSound();
+    }
+  }
+
+  function getPianoKeyFromPoint(x, y) {
+    const element = document.elementFromPoint(x, y);
+    const key = element?.closest?.(".key");
+    return key && keyboard.contains(key) ? key : null;
   }
 
   function handlePianoPointerUp(event) {
