@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="sr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#141009">
+<title>FGR — Capture Lab (snimi i zapamti pesmu)</title>
+<style>
+  :root{
+    --bg:#141009; --panel:#1d1810; --panel-2:#241e15; --ink:#f3ecdd; --ink-2:#c6bba4; --muted:#8b7f68;
+    --line:#332b1e; --brass:#e3b45c; --brass-2:#c89234; --brass-ink:#f4d99a; --coral:#e28a58; --blue:#83a6df;
+    --rec:#e0574f;
+    --mono:ui-monospace,"SF Mono",Menlo,"Roboto Mono",monospace; --sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:radial-gradient(800px 400px at 85% -10%, #2a2114 0%, transparent 60%),var(--bg);
+       color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45;}
+  .wrap{max-width:760px;margin:0 auto;padding:22px 18px 60px;}
+  h1{font-size:20px;margin:0 0 2px;} .sub{color:var(--muted);font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin-bottom:18px;}
+  .nav{font-size:12px;color:var(--muted);margin-bottom:16px;} .nav a{color:var(--brass-ink);}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 20px 44px -22px rgba(0,0,0,.7);}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  button{font:inherit;font-weight:650;font-size:14px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);padding:11px 16px;border-radius:11px;cursor:pointer;transition:.15s;}
+  button:hover{border-color:var(--brass);} button:disabled{opacity:.45;cursor:not-allowed;}
+  button.primary{background:linear-gradient(150deg,var(--brass),var(--brass-2));color:#1a1204;border-color:transparent;}
+  button.rec{background:var(--rec);color:#fff;border-color:transparent;}
+  .mini{font-size:12.5px;padding:7px 11px;border-radius:9px;}
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;}
+  .seg button{border:0;background:transparent;padding:8px 13px;font-size:13px;border-radius:7px;}
+  .seg button[aria-pressed="true"]{background:linear-gradient(150deg,var(--brass),var(--brass-2));color:#1a1204;}
+  .status{font-size:12.5px;color:var(--muted);margin-top:12px;} .status b{color:var(--ink-2);} .status.warn{color:var(--coral);}
+  .rec-live{display:flex;align-items:center;gap:12px;margin-top:14px;font-family:var(--mono);font-size:26px;font-weight:700;}
+  .rec-live .dot{width:14px;height:14px;border-radius:50%;background:var(--rec);animation:blink 1s steps(2,end) infinite;}
+  @keyframes blink{50%{opacity:.25;}} @media (prefers-reduced-motion:reduce){.rec-live .dot{animation:none;}}
+  .meter{height:8px;border-radius:999px;background:var(--line);overflow:hidden;flex:1;min-width:120px;}
+  .meter>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brass),var(--coral));transition:width .06s;}
+  .empty{color:var(--muted);font-size:13px;padding:10px 2px;}
+  .item{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2);margin-top:10px;}
+  .item .info{flex:1;min-width:0;} .item .name{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .item .meta{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:3px;}
+  .item audio{height:34px;} .item .acts{display:flex;gap:6px;}
+  .iconbtn{padding:8px 10px;border-radius:9px;font-size:13px;}
+  .hint{font-size:11.5px;color:var(--muted);line-height:1.6;} .hint b{color:var(--ink-2);}
+  code{font-family:var(--mono);background:var(--panel-2);padding:1px 6px;border-radius:5px;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎙️ Capture Lab</h1>
+  <div class="sub">FGR · uhvati i zapamti zvuk pesme</div>
+  <div class="nav">Korak 2 od plana · sledeći: razdvajanje kanala &nbsp;·&nbsp; <a href="chord-lab.html">← Chord Lab</a></div>
+
+  <div class="card">
+    <div class="row">
+      <div class="seg" id="srcSeg" role="group" aria-label="Izvor zvuka">
+        <button data-src="tab" aria-pressed="true">Podeli tab (desktop)</button>
+        <button data-src="mic" aria-pressed="false">Mikrofon (telefon)</button>
+      </div>
+      <button id="recBtn" class="rec">● Snimaj pesmu</button>
+      <button id="stopBtn" disabled>■ Zaustavi i sačuvaj</button>
+    </div>
+    <div id="status" class="status">Pusti pesmu u drugom tabu, klikni <b>Snimaj</b>, izaberi taj tab i čekiraj <b>„Deli audio"</b>. Snimi celu pesmu pa <b>Zaustavi</b> — sačuva se ovde u browseru.</div>
+    <div id="live" class="rec-live" hidden><span class="dot"></span><span id="timer">0:00</span><span class="meter"><i id="mtr"></i></span></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <b style="font-size:14px">Zapamćene pesme (u ovom browseru)</b>
+      <button id="refreshBtn" class="mini">Osveži</button>
+    </div>
+    <div id="list"></div>
+  </div>
+
+  <div class="card">
+    <p class="hint"><b>Šta ovo dokazuje:</b> zvuk se hvata čist (tab/mikrofon), snima u <code>MediaRecorder</code> i trajno pamti u <code>IndexedDB</code> — preživi zatvaranje taba. To je „memorija" iz našeg plana. Sledeći korak razdvaja ovaj sačuvani zvuk na kanale (bubnjevi/bas/harmonija/solo) i nad harmonijom radi prepoznavanje akorda.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const DB="fgr-capture", STORE="songs"; let db;
+  let source="tab", stream, rec, chunks=[], startT=0, timerId, ctx, analyser, rafId, freqData;
+
+  // ---- IndexedDB ----
+  function openDB(){ return new Promise((res,rej)=>{
+    const r=indexedDB.open(DB,1);
+    r.onupgradeneeded=e=>{ e.target.result.createObjectStore(STORE,{keyPath:"id"}); };
+    r.onsuccess=e=>{ db=e.target.result; res(); }; r.onerror=e=>rej(e.target.error);
+  });}
+  function save(rec){ return tx("readwrite",s=>s.put(rec)); }
+  function all(){ return new Promise((res,rej)=>{ const out=[]; const s=db.transaction(STORE).objectStore(STORE).openCursor();
+    s.onsuccess=e=>{ const c=e.target.result; if(c){ out.push(c.value); c.continue(); } else res(out); }; s.onerror=e=>rej(e.target.error); }); }
+  function del(id){ return tx("readwrite",s=>s.delete(id)); }
+  function tx(mode,fn){ return new Promise((res,rej)=>{ const t=db.transaction(STORE,mode); const s=t.objectStore(STORE); fn(s); t.oncomplete=res; t.onerror=e=>rej(e.target.error); }); }
+
+  // ---- source ----
+  $("srcSeg").addEventListener("click",e=>{ const b=e.target.closest("button[data-src]"); if(!b)return; source=b.dataset.src;
+    [...$("srcSeg").children].forEach(x=>x.setAttribute("aria-pressed",x===b)); });
+
+  async function startRec(){
+    try{
+      if(source==="tab"){
+        if(!navigator.mediaDevices.getDisplayMedia) return warn("Nema deljenja taba — probaj Chrome/Edge desktop ili Mikrofon.");
+        stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
+        if(!stream.getAudioTracks().length){ stopTracks(); return warn("Nema audio-a! Moraš da čekiraš „Deli audio taba"."); }
+      }else{
+        stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+      }
+    }catch(err){ return warn("Odbijeno / greška: "+err.message); }
+
+    const aTrack=stream.getAudioTracks()[0];
+    const aStream=new MediaStream([aTrack]);
+    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")?"audio/webm;codecs=opus"
+              : MediaRecorder.isTypeSupported("audio/webm")?"audio/webm":"";
+    rec=new MediaRecorder(aStream, mime?{mimeType:mime}:undefined);
+    chunks=[]; rec.ondataavailable=e=>{ if(e.data.size)chunks.push(e.data); };
+    rec.onstop=finalize; rec.start(1000);
+
+    // VU meter
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    analyser=ctx.createAnalyser(); analyser.fftSize=1024; ctx.createMediaStreamSource(aStream).connect(analyser);
+    freqData=new Uint8Array(analyser.frequencyBinCount); meterLoop();
+
+    startT=Date.now(); $("live").hidden=false; tick(); timerId=setInterval(tick,500);
+    $("recBtn").disabled=true; $("stopBtn").disabled=false;
+    setStatus("Snima… ("+(source==="tab"?"tab":"mikrofon")+"). Klikni Zaustavi kad se pesma završi.");
+    aTrack.onended=()=>{ if(rec&&rec.state!=="inactive") stopRec(); };
+  }
+
+  function meterLoop(){ if(!analyser)return; analyser.getByteFrequencyData(freqData);
+    let s=0; for(let i=0;i<freqData.length;i++)s+=freqData[i]; const avg=s/freqData.length/255;
+    $("mtr").style.width=Math.min(100,avg*180)+"%"; rafId=requestAnimationFrame(meterLoop); }
+
+  function tick(){ const s=Math.floor((Date.now()-startT)/1000); $("timer").textContent=Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
+
+  function stopRec(){ if(rec&&rec.state!=="inactive")rec.stop();
+    clearInterval(timerId); if(rafId)cancelAnimationFrame(rafId); if(ctx)ctx.close().catch(()=>{}); analyser=null;
+    stopTracks(); $("live").hidden=true; $("recBtn").disabled=false; $("stopBtn").disabled=true; }
+  function stopTracks(){ if(stream)stream.getTracks().forEach(t=>t.stop()); }
+
+  async function finalize(){
+    const blob=new Blob(chunks,{type:chunks[0]?.type||"audio/webm"});
+    const dur=Math.round((Date.now()-startT)/1000);
+    const name=prompt("Naziv pesme:", "Snimak "+new Date().toLocaleTimeString("sr"));
+    if(name===null){ setStatus("Otkazano — snimak nije sačuvan."); return; }
+    const item={ id:"s-"+Date.now(), name:name||"Bez naziva", blob, size:blob.size, dur, at:Date.now() };
+    await save(item); setStatus("Sačuvano: <b>"+item.name+"</b> ("+fmtDur(dur)+", "+fmtSize(blob.size)+").");
+    render();
+  }
+
+  async function render(){
+    const items=(await all()).sort((a,b)=>b.at-a.at); const el=$("list");
+    if(!items.length){ el.innerHTML='<div class="empty">Još nema zapamćenih pesama.</div>'; return; }
+    el.innerHTML="";
+    items.forEach(it=>{
+      const url=URL.createObjectURL(it.blob);
+      const d=document.createElement("div"); d.className="item";
+      d.innerHTML='<div class="info"><div class="name">'+esc(it.name)+'</div>'
+        +'<div class="meta">'+fmtDur(it.dur)+' · '+fmtSize(it.size)+' · '+new Date(it.at).toLocaleString("sr")+'</div>'
+        +'<audio controls src="'+url+'"></audio></div>'
+        +'<div class="acts"><button class="iconbtn" data-dl>⬇</button><button class="iconbtn" data-del>🗑</button></div>';
+      d.querySelector("[data-dl]").onclick=()=>{ const a=document.createElement("a"); a.href=url; a.download=it.name.replace(/[^\w -]/g,"_")+".webm"; a.click(); };
+      d.querySelector("[data-del]").onclick=async()=>{ if(confirm("Obriši „"+it.name+"“?")){ await del(it.id); render(); } };
+      el.appendChild(d);
+    });
+  }
+
+  const fmtDur=s=>Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
+  const fmtSize=b=> b>1e6?(b/1e6).toFixed(1)+" MB":(b/1e3).toFixed(0)+" KB";
+  const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  function warn(m){ setStatus(m,true); $("recBtn").disabled=false; $("stopBtn").disabled=true; }
+  function setStatus(m,w){ const s=$("status"); s.innerHTML=m; s.classList.toggle("warn",!!w); }
+
+  $("recBtn").onclick=startRec; $("stopBtn").onclick=stopRec; $("refreshBtn").onclick=render;
+  openDB().then(render).catch(e=>setStatus("IndexedDB greška: "+e.message,true));
+})();
+</script>
+</body>
+</html>
