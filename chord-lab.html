@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="sr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#141009">
+<title>FGR — Chord Lab (test prepoznavanja akorda)</title>
+<style>
+  :root{
+    --bg:#141009; --panel:#1d1810; --panel-2:#241e15; --ink:#f3ecdd; --ink-2:#c6bba4; --muted:#8b7f68;
+    --line:#332b1e; --brass:#e3b45c; --brass-2:#c89234; --brass-ink:#f4d99a; --brass-soft:#2b2214;
+    --coral:#e28a58; --blue:#83a6df; --ok:#8fce7a; --bad:#d98a6a;
+    --mono:ui-monospace,"SF Mono",Menlo,"Roboto Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:radial-gradient(800px 400px at 85% -10%, #2a2114 0%, transparent 60%),var(--bg);
+       color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45;}
+  .wrap{max-width:760px;margin:0 auto;padding:22px 18px 60px;}
+  h1{font-size:20px;margin:0 0 2px;letter-spacing:.02em;}
+  .sub{color:var(--muted);font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin-bottom:18px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px;
+        box-shadow:0 20px 44px -22px rgba(0,0,0,.7);}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  button{font:inherit;font-weight:650;font-size:14px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);
+         padding:11px 16px;border-radius:11px;cursor:pointer;transition:.15s;}
+  button:hover{border-color:var(--brass);}
+  button.primary{background:linear-gradient(150deg,var(--brass),var(--brass-2));color:#1a1204;border-color:transparent;}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+  .status{font-size:12.5px;color:var(--muted);margin-top:10px;} .status b{color:var(--ink-2);}
+  .status.warn{color:var(--coral);}
+
+  .big{display:flex;align-items:center;gap:20px;justify-content:center;padding:8px 0 6px;}
+  .chord{font-family:var(--mono);font-size:64px;font-weight:700;letter-spacing:-.02em;line-height:1;min-width:150px;text-align:center;}
+  .chord small{color:var(--brass);font-size:.45em;vertical-align:super;}
+  .conf{min-width:120px;}
+  .conf .lab{font-size:10.5px;color:var(--muted);letter-spacing:.1em;font-weight:700;text-transform:uppercase;}
+  .conf .barwrap{height:8px;border-radius:999px;background:var(--line);overflow:hidden;margin-top:4px;}
+  .conf .barwrap>i{display:block;height:100%;width:0;background:var(--brass);transition:width .12s;}
+  .conf .pct{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px;}
+
+  .chroma{display:grid;grid-template-columns:repeat(12,1fr);gap:5px;align-items:end;height:120px;margin-top:6px;}
+  .chroma .c{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:5px;}
+  .chroma .bar{width:100%;border-radius:5px 5px 3px 3px;background:linear-gradient(var(--brass),var(--brass-2));min-height:2px;transition:height .08s;}
+  .chroma .c.in .bar{background:linear-gradient(var(--coral),#c85f30);}
+  .chroma .lbl{font-family:var(--mono);font-size:10px;color:var(--muted);}
+  .chroma .c.root .lbl{color:var(--brass-ink);font-weight:700;}
+
+  .log{margin-top:6px;max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:11px;background:var(--panel-2);}
+  .log table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:13px;}
+  .log td{padding:7px 12px;border-bottom:1px solid var(--line);}
+  .log td:first-child{color:var(--muted);width:70px;} .log td:last-child{text-align:right;color:var(--brass-ink);font-weight:700;}
+  .log tr:last-child td{border-bottom:none;}
+  .hint{font-size:11.5px;color:var(--muted);line-height:1.6;} .hint b{color:var(--ink-2);}
+  select,input[type=range]{font:inherit;}
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px;}
+  .seg button{border:0;background:transparent;padding:8px 13px;font-size:13px;border-radius:7px;}
+  .seg button[aria-pressed="true"]{background:linear-gradient(150deg,var(--brass),var(--brass-2));color:#1a1204;}
+  code{font-family:var(--mono);background:var(--panel-2);padding:1px 6px;border-radius:5px;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎼 Chord Lab</h1>
+  <div class="sub">FGR · test prepoznavanja akorda</div>
+
+  <div class="card">
+    <div class="row">
+      <div class="seg" id="srcSeg" role="group" aria-label="Izvor zvuka">
+        <button data-src="tab" aria-pressed="true">Podeli tab (desktop)</button>
+        <button data-src="mic" aria-pressed="false">Mikrofon (telefon)</button>
+      </div>
+      <button id="startBtn" class="primary">▶ Počni da slušaš</button>
+      <button id="stopBtn" disabled>■ Stop</button>
+    </div>
+    <div id="status" class="status">Izaberi izvor pa klikni „Počni". Za <b>Podeli tab</b>: pusti pesmu na YouTube-u u drugom tabu, klikni Počni, izaberi taj tab i <b>obavezno čekiraj „Deli audio"</b>.</div>
+  </div>
+
+  <div class="card">
+    <div class="big">
+      <div class="chord" id="chord">—</div>
+      <div class="conf">
+        <div class="lab">Sigurnost</div>
+        <div class="barwrap"><i id="confBar"></i></div>
+        <div class="pct" id="confPct">—</div>
+      </div>
+    </div>
+    <div class="chroma" id="chroma"></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <b style="font-size:14px">Chord chart (snimljeno)</b>
+      <div class="row">
+        <button id="clearBtn">Obriši</button>
+        <button id="copyBtn">Kopiraj JSON</button>
+      </div>
+    </div>
+    <div class="log"><table id="logTable"><tbody></tbody></table></div>
+    <p class="hint" style="margin-top:12px">Ovo je ono što bi se sačuvalo uz pesmu u bazi. Format: <code>[{"t":0.0,"n":"Am7"}, …]</code> — kasnije se samo čita i sinhronizuje sa YouTube vremenom, bez ponovnog prepoznavanja.</p>
+  </div>
+
+  <div class="card">
+    <p class="hint"><b>Kako radi:</b> hvatamo čist digitalni zvuk (tab ili mikrofon) → FFT → sabiramo energiju u 12 tonova (hromagram) → poredimo sa šablonima akorda (dur, mol, 7, m7, maj7, dim…) → biramo najbliži. Rezultat se glača kroz vreme da ne treperi. Ovo je prototip — tačnost zavisi od pesme (čist klavir/gitara ide odlično, gusta produkcija teže).</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const NOTE = ["C","Cis","D","Dis","E","F","Fis","G","Gis","A","B","H"]; // H = B natural (kao u aplikaciji)
+  const TEMPLATES = {
+    "":     [0,4,7],        // dur
+    "m":    [0,3,7],        // mol
+    "7":    [0,4,7,10],
+    "m7":   [0,3,7,10],
+    "maj7": [0,4,7,11],
+    "dim":  [0,3,6],
+    "sus4": [0,5,7]
+  };
+  // napravi 12-dim vektore za svaki koren + kvalitet
+  const CHORDS = [];
+  for(const q in TEMPLATES){
+    for(let r=0;r<12;r++){
+      const v=new Array(12).fill(0);
+      TEMPLATES[q].forEach(iv=>{ v[(r+iv)%12]=1; });
+      const norm=Math.sqrt(TEMPLATES[q].length);
+      CHORDS.push({name:NOTE[r]+q, root:r, vec:v, norm});
+    }
+  }
+
+  let ctx, analyser, stream, raf, freqData, running=false, t0=0;
+  let smooth=new Array(12).fill(0);
+  let lastLogged="", stableName="", stableCount=0;
+  let source="tab";
+  const chart=[];
+
+  const $=id=>document.getElementById(id);
+  const chromaEl=$("chroma"), cells=[];
+  for(let i=0;i<12;i++){
+    const c=document.createElement("div"); c.className="c";
+    c.innerHTML='<div class="bar" style="height:2px"></div><div class="lbl">'+NOTE[i]+'</div>';
+    chromaEl.appendChild(c); cells.push(c);
+  }
+
+  // izbor izvora
+  $("srcSeg").addEventListener("click",e=>{
+    const b=e.target.closest("button[data-src]"); if(!b)return;
+    source=b.dataset.src;
+    [...$("srcSeg").children].forEach(x=>x.setAttribute("aria-pressed", x===b));
+  });
+
+  async function start(){
+    try{
+      if(source==="tab"){
+        if(!navigator.mediaDevices.getDisplayMedia){ return warn("Ovaj browser ne podržava deljenje taba. Probaj Chrome/Edge na desktopu, ili izaberi Mikrofon."); }
+        stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
+        if(stream.getAudioTracks().length===0){
+          stopTracks(); return warn("Nema audio-a! Pri deljenju MORAŠ da čekiraš „Deli audio taba". Pokušaj ponovo.");
+        }
+      }else{
+        stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+      }
+    }catch(err){ return warn("Odbijeno / greška: "+err.message); }
+
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const src=ctx.createMediaStreamSource(stream);
+    analyser=ctx.createAnalyser();
+    analyser.fftSize=16384; analyser.smoothingTimeConstant=0.7;
+    src.connect(analyser);
+    freqData=new Float32Array(analyser.frequencyBinCount);
+    running=true; t0=performance.now();
+    $("startBtn").disabled=true; $("stopBtn").disabled=false;
+    setStatus('Sluša… ('+(source==="tab"?"tab":"mikrofon")+")");
+    loop();
+    // ako korisnik zaustavi deljenje iz browsera
+    stream.getAudioTracks()[0].onended=stop;
+  }
+
+  function loop(){
+    if(!running) return;
+    analyser.getFloatFrequencyData(freqData);
+    const sr=ctx.sampleRate, N=analyser.fftSize;
+    const chroma=new Array(12).fill(0);
+    const fMin=60, fMax=2200;
+    for(let i=0;i<freqData.length;i++){
+      const f=i*sr/N; if(f<fMin) continue; if(f>fMax) break;
+      let mag=Math.pow(10, freqData[i]/20); // dB -> lin
+      if(!isFinite(mag)||mag<1e-6) continue;
+      const midi=69+12*Math.log2(f/440);
+      const pc=((Math.round(midi)%12)+12)%12;
+      chroma[pc]+=mag;
+    }
+    // glačanje + normalizacija
+    let mx=0; for(let i=0;i<12;i++){ smooth[i]=smooth[i]*0.75+chroma[i]*0.25; if(smooth[i]>mx)mx=smooth[i]; }
+    const norm=new Array(12);
+    for(let i=0;i<12;i++) norm[i]=mx>0?smooth[i]/mx:0;
+
+    // prepoznaj akord (cosine similarnost)
+    let best=null,bestScore=-1,second=-1;
+    const vlen=Math.sqrt(norm.reduce((s,x)=>s+x*x,0))||1;
+    for(const ch of CHORDS){
+      let dot=0; for(let i=0;i<12;i++) dot+=norm[i]*ch.vec[i];
+      const score=dot/(vlen*ch.norm);
+      if(score>bestScore){ second=bestScore; bestScore=score; best=ch; }
+      else if(score>second){ second=score; }
+    }
+    const margin=bestScore-second;
+    const enoughSignal=mx>1e-3;
+    const confident = enoughSignal && bestScore>0.72 && margin>0.03;
+
+    render(norm, best, confident?bestScore:0, confident, confident?best.root:-1);
+
+    // stabilizacija + log
+    const shown = confident ? best.name : "";
+    if(shown && shown===stableName){ stableCount++; }
+    else { stableName=shown; stableCount=1; }
+    if(stableCount===4 && shown && shown!==lastLogged){
+      lastLogged=shown;
+      const t=(performance.now()-t0)/1000;
+      chart.push({t:Math.round(t*10)/10, n:shown});
+      addLogRow(t, shown);
+    }
+    raf=requestAnimationFrame(loop);
+  }
+
+  function render(norm, best, score, confident, rootPc){
+    for(let i=0;i<12;i++){
+      cells[i].querySelector(".bar").style.height=Math.max(2,norm[i]*100)+"%";
+      const inChord=confident && best && best.vec[i]===1;
+      cells[i].classList.toggle("in", !!inChord);
+      cells[i].classList.toggle("root", i===rootPc);
+    }
+    const parts=confident? best.name.match(/^([A-Za-z#]+?)(7|m7|maj7|dim|sus4|m)?$/):null;
+    if(confident){
+      // lep prikaz sa nadpisanim brojem
+      $("chord").innerHTML = best.name.replace(/(maj7|m7|7|dim|sus4)$/, s=>'<small>'+s+'</small>');
+    } else { $("chord").textContent="—"; }
+    $("confBar").style.width=(score*100)+"%";
+    $("confPct").textContent=confident?Math.round(score*100)+"%":"—";
+  }
+
+  function addLogRow(t,name){
+    const tb=$("logTable").querySelector("tbody");
+    const tr=document.createElement("tr");
+    const mm=Math.floor(t/60), ss=Math.floor(t%60);
+    tr.innerHTML='<td>'+mm+":"+String(ss).padStart(2,"0")+'</td><td></td><td>'+name+'</td>';
+    tb.appendChild(tr); $("logTable").parentElement.scrollTop=1e9;
+  }
+
+  function stop(){
+    running=false; if(raf)cancelAnimationFrame(raf);
+    stopTracks(); if(ctx)ctx.close().catch(()=>{});
+    $("startBtn").disabled=false; $("stopBtn").disabled=true;
+    setStatus("Zaustavljeno. Snimljeno akorada: <b>"+chart.length+"</b>.");
+  }
+  function stopTracks(){ if(stream)stream.getTracks().forEach(t=>t.stop()); }
+
+  function warn(m){ setStatus(m,true); $("startBtn").disabled=false; $("stopBtn").disabled=true; }
+  function setStatus(m,isWarn){ const s=$("status"); s.innerHTML=m; s.classList.toggle("warn",!!isWarn); }
+
+  $("startBtn").onclick=start;
+  $("stopBtn").onclick=stop;
+  $("clearBtn").onclick=()=>{ chart.length=0; lastLogged=""; $("logTable").querySelector("tbody").innerHTML=""; };
+  $("copyBtn").onclick=()=>{
+    const json=JSON.stringify(chart);
+    navigator.clipboard.writeText(json).then(()=>setStatus("JSON kopiran ("+chart.length+" akorada).")).catch(()=>{
+      setStatus("Kopiranje nije uspelo — evo JSON-a u konzoli."); console.log(json);
+    });
+  };
+})();
+</script>
+</body>
+</html>
