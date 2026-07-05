@@ -576,6 +576,57 @@ button {
   cursor: not-allowed;
 }
 
+/* ---------------- Piano dock (always visible) ---------------- */
+
+.piano-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  margin-top: auto;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--page-bg) 92%, transparent), var(--page-bg-2));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -12px 30px -12px rgba(0, 0, 0, 0.5);
+}
+
+.dock-handle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.dock-handle:hover {
+  color: var(--accent);
+}
+
+.dock-handle-icon {
+  font-size: 12px;
+  line-height: 1;
+  transition: transform 0.2s;
+}
+
+.piano-dock.collapsed .dock-handle-icon {
+  transform: rotate(180deg);
+}
+
+.piano-dock.collapsed .mobile-controls,
+.piano-dock.collapsed .piano-area {
+  display: none !important;
+}
+
 /* ---------------- Piano ---------------- */
 
 .piano-area {

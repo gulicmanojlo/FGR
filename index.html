@@ -18,7 +18,7 @@
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=70">
+    <link rel="stylesheet" href="styles.css?v=71">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="FGR aplikacija">
@@ -216,30 +216,6 @@
           </section>
         </header>
 
-        <section id="mobileControls" class="mobile-controls" aria-label="Mobilne kontrole">
-          <div class="segmented" role="radiogroup" aria-label="Mod sviranja">
-            <label>
-              <input type="radio" name="mobileMode" value="tone" checked>
-              <span>Ton</span>
-            </label>
-            <label>
-              <input type="radio" name="mobileMode" value="chord">
-              <span>Akord</span>
-            </label>
-          </div>
-
-          <div class="mobile-modifiers" aria-label="Obrtaji i mol">
-            <button class="modifier-button" data-mobile-modifier="left" type="button" aria-label="Levi obrtaj">&larr;</button>
-            <button class="modifier-button modifier-minor" data-mobile-modifier="minor" type="button">mol</button>
-            <button class="modifier-button" data-mobile-modifier="right" type="button" aria-label="Desni obrtaj">&rarr;</button>
-          </div>
-        </section>
-
-        <section class="piano-area" aria-label="Klavirska tastatura">
-          <div id="pianoScroll" class="piano-scroll">
-            <div id="keyboard" class="keyboard" role="group" aria-label="Klavirske dirke"></div>
-          </div>
-        </section>
       </section>
 
       <!-- ======================= TAB: REPERTOAR ======================= -->
@@ -372,6 +348,39 @@
         </div>
       </section>
 
+      <!-- ======================= KLAVIR — uvek vidljiv (dock) ======================= -->
+      <section id="pianoDock" class="piano-dock" aria-label="Klavir">
+        <button id="pianoDockToggle" class="dock-handle" type="button" aria-expanded="true" title="Sakrij / prika&#382;i klavir">
+          <span class="dock-handle-icon" aria-hidden="true">&#9662;</span>
+          <span class="dock-handle-label">Klavir</span>
+        </button>
+
+        <section id="mobileControls" class="mobile-controls" aria-label="Mobilne kontrole">
+          <div class="segmented" role="radiogroup" aria-label="Mod sviranja">
+            <label>
+              <input type="radio" name="mobileMode" value="tone" checked>
+              <span>Ton</span>
+            </label>
+            <label>
+              <input type="radio" name="mobileMode" value="chord">
+              <span>Akord</span>
+            </label>
+          </div>
+
+          <div class="mobile-modifiers" aria-label="Obrtaji i mol">
+            <button class="modifier-button" data-mobile-modifier="left" type="button" aria-label="Levi obrtaj">&larr;</button>
+            <button class="modifier-button modifier-minor" data-mobile-modifier="minor" type="button">mol</button>
+            <button class="modifier-button" data-mobile-modifier="right" type="button" aria-label="Desni obrtaj">&rarr;</button>
+          </div>
+        </section>
+
+        <section class="piano-area" aria-label="Klavirska tastatura">
+          <div id="pianoScroll" class="piano-scroll">
+            <div id="keyboard" class="keyboard" role="group" aria-label="Klavirske dirke"></div>
+          </div>
+        </section>
+      </section>
+
       <div id="playlistDialog" class="playlist-dialog" hidden>
         <button class="playlist-dialog-backdrop" type="button" data-playlist-close aria-label="Zatvori playlist browser"></button>
         <section class="playlist-dialog-panel" role="dialog" aria-modal="true" aria-labelledby="playlistDialogTitle">
@@ -384,7 +393,7 @@
       </div>
     </main>
 
-    <script src="ui-shell.js?v=70" defer></script>
+    <script src="ui-shell.js?v=71" defer></script>
     <script src="app.js?v=70" defer></script>
   </body>
 </html>

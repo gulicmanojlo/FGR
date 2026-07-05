@@ -3,12 +3,13 @@
   "use strict";
 
   var STORAGE_KEY = "fgr-ui-v1";
-  var prefs = { theme: "dark", tab: "sviranje" };
+  var prefs = { theme: "dark", tab: "sviranje", pianoCollapsed: false };
   try {
     var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
     if (saved && typeof saved === "object") {
       if (saved.theme === "light" || saved.theme === "dark") prefs.theme = saved.theme;
       if (typeof saved.tab === "string") prefs.tab = saved.tab;
+      if (typeof saved.pianoCollapsed === "boolean") prefs.pianoCollapsed = saved.pianoCollapsed;
     }
   } catch (e) {}
 
@@ -85,6 +86,27 @@
     });
   });
 
+  var pianoDock = document.getElementById("pianoDock");
+  var pianoDockToggle = document.getElementById("pianoDockToggle");
+
+  function applyPianoDock() {
+    if (!pianoDock) return;
+    pianoDock.classList.toggle("collapsed", prefs.pianoCollapsed);
+    if (pianoDockToggle) {
+      pianoDockToggle.setAttribute("aria-expanded", prefs.pianoCollapsed ? "false" : "true");
+    }
+    window.dispatchEvent(new Event("resize"));
+  }
+
+  if (pianoDockToggle) {
+    pianoDockToggle.addEventListener("click", function () {
+      prefs.pianoCollapsed = !prefs.pianoCollapsed;
+      save();
+      applyPianoDock();
+    });
+  }
+
   applyTheme();
   selectTab(prefs.tab);
+  applyPianoDock();
 })();
