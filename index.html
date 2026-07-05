@@ -18,7 +18,7 @@
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=71">
+    <link rel="stylesheet" href="styles.css?v=72">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="FGR aplikacija">
@@ -216,6 +216,13 @@
           </section>
         </header>
 
+        <div class="stage" aria-hidden="true">
+          <div class="stage-chord">
+            <span class="stage-label">Svira se</span>
+            <div id="stageChordName">&mdash;</div>
+            <span class="stage-hint">Sviraj na klaviru dole, ra&#269;unarskoj tastaturi ili MIDI klavijaturi</span>
+          </div>
+        </div>
       </section>
 
       <!-- ======================= TAB: REPERTOAR ======================= -->
@@ -320,6 +327,19 @@
             <p>Bubnjevi &middot; bas &middot; harmonija &middot; solo, svaki kanal posebno. Radi u browseru (Demucs), analizira se jednom pa se pamti.</p>
           </div>
         </div>
+
+        <div class="pipeline-wrap">
+          <h3 class="pipeline-title">Kako radi ceo tok</h3>
+          <div class="pipeline">
+            <div class="pipe-step"><span class="pipe-num">1</span><b>Snimi jednom</b><span>pusti pesmu, podeli tab &mdash; zvuk se pamti</span></div>
+            <span class="pipe-arrow">&rarr;</span>
+            <div class="pipe-step"><span class="pipe-num">2</span><b>Razdvoji kanale</b><span>bas &middot; bubnjevi &middot; harmonija &middot; solo</span></div>
+            <span class="pipe-arrow">&rarr;</span>
+            <div class="pipe-step"><span class="pipe-num">3</span><b>Prepoznaj akorde</b><span>na &#269;istoj harmoniji &mdash; ta&#269;no</span></div>
+            <span class="pipe-arrow">&rarr;</span>
+            <div class="pipe-step"><span class="pipe-num">4</span><b>&#268;itaj iz memorije</b><span>slede&#263;i put sve je ve&#263; tu</span></div>
+          </div>
+        </div>
       </section>
 
       <!-- ======================= TAB: UCENJE ======================= -->
@@ -328,11 +348,23 @@
           <h2>U&#269;enje harmonije</h2>
           <p>Teorija koja se svira: akordi tonaliteta, kvintni krug, transpozicija preko stepeni i trena&#382;er skala &mdash; sve povezano sa klavirom iz aplikacije.</p>
         </div>
-        <div class="card-grid">
-          <div class="feature-card">
-            <span class="fc-head"><span class="fc-icon">&#127900;</span><h3>Akordi tonaliteta</h3><span class="badge soon">Sledi prvo</span></span>
-            <p>Izaberi tonalitet i vidi njegove akorde po stepenima (i &middot; iv &middot; V&hellip;). Klik na akord &mdash; odsvira se na klaviru.</p>
+        <section class="learn-tool" aria-label="Akordi tonaliteta">
+          <div class="lt-head">
+            <h3>&#127900; Akordi tonaliteta</h3>
+            <div class="lt-controls">
+              <label class="select-label" for="learnRoot">Tonalitet</label>
+              <select id="learnRoot" class="sound-select"></select>
+              <div class="segmented compact" role="radiogroup" aria-label="Dur ili mol">
+                <label><input type="radio" name="learnQuality" value="major"><span>Dur</span></label>
+                <label><input type="radio" name="learnQuality" value="minor" checked><span>Mol</span></label>
+              </div>
+            </div>
+            <span class="lt-hint">Klik na akord &mdash; odsvira se i osvetli na klaviru dole</span>
           </div>
+          <div id="learnChords" class="degree-grid"></div>
+        </section>
+
+        <div class="card-grid">
           <div class="feature-card">
             <span class="fc-head"><span class="fc-icon">&#128260;</span><h3>Transpozicija</h3><span class="badge soon">U izradi</span></span>
             <p>Nau&#269;io si pesmu u a-molu? Vidi iste stepene u fis-molu, d-molu&hellip; Oblik je isti, menja se samo osnova.</p>
@@ -393,7 +425,7 @@
       </div>
     </main>
 
-    <script src="ui-shell.js?v=71" defer></script>
-    <script src="app.js?v=70" defer></script>
+    <script src="ui-shell.js?v=72" defer></script>
+    <script src="app.js?v=71" defer></script>
   </body>
 </html>

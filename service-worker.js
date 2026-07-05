@@ -1,10 +1,10 @@
-﻿const CACHE_NAME = "pwa-klavir-v71";
+﻿const CACHE_NAME = "pwa-klavir-v72";
 const CORE_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=71",
-  "./app.js?v=70",
-  "./ui-shell.js?v=71",
+  "./styles.css?v=72",
+  "./app.js?v=71",
+  "./ui-shell.js?v=72",
   "./manifest.webmanifest",
   "./repertoire.json",
   "./icons/icon.svg",

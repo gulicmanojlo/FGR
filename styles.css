@@ -1314,6 +1314,257 @@ a.feature-card:hover {
   border: 1px solid var(--line);
 }
 
+/* ---------------- Stage (big chord on Sviranje) ---------------- */
+
+.stage {
+  flex: 1 1 auto;
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.stage-chord {
+  text-align: center;
+  display: grid;
+  gap: 6px;
+}
+
+.stage-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+#stageChordName {
+  font-family: ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
+  font-size: clamp(56px, 11vw, 132px);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  min-height: 1em;
+}
+
+#stageChordName.idle {
+  color: var(--line);
+}
+
+.stage-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ---------------- Learn: akordi tonaliteta ---------------- */
+
+.learn-tool {
+  width: 100%;
+  max-width: 1240px;
+  margin: 14px auto 0;
+  padding: 0 14px;
+}
+
+.lt-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--panel-bg-2);
+}
+
+.lt-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.lt-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lt-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.degree-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--panel-bg);
+  box-shadow: var(--shadow);
+}
+
+.deg-card {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 14px 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-bg-2);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.12s;
+}
+
+.deg-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.deg-card:active,
+.deg-card.playing {
+  background: linear-gradient(150deg, var(--accent), var(--accent-deep));
+  border-color: var(--accent-deep);
+  color: var(--accent-contrast);
+}
+
+.deg-card .deg {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.deg-card:active .deg,
+.deg-card.playing .deg {
+  color: rgba(26, 18, 4, 0.7);
+}
+
+.deg-card .deg-name {
+  font-family: ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
+  font-size: 21px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.deg-card .deg-notes {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.deg-card:active .deg-notes,
+.deg-card.playing .deg-notes {
+  color: rgba(26, 18, 4, 0.7);
+}
+
+.deg-card.alt {
+  border-style: dashed;
+}
+
+/* ---------------- Pipeline (Skidanje) ---------------- */
+
+.pipeline-wrap {
+  width: 100%;
+  max-width: 1240px;
+  margin: 4px auto 0;
+  padding: 0 14px 18px;
+}
+
+.pipeline-title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pipeline {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pipe-step {
+  flex: 1 1 180px;
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-bg);
+  font-size: 13px;
+}
+
+.pipe-step span:last-child {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.pipe-num {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pipe-arrow {
+  align-self: center;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+/* ---------------- Fill space nicely ---------------- */
+
+.tab-intro,
+.card-grid {
+  width: 100%;
+  max-width: 1240px;
+  margin-inline: auto;
+}
+
+.feature-card {
+  padding: 18px;
+  gap: 10px;
+}
+
+.feature-card .fc-icon {
+  font-size: 26px;
+}
+
+.tab-panel[data-panel="repertoar"] .repertoire-panel {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-panel[data-panel="repertoar"] .repertoire-layout {
+  flex: 1 1 auto;
+  align-items: stretch;
+}
+
+.tab-panel[data-panel="repertoar"] .repertoire-sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-panel[data-panel="repertoar"] .sheet-wrap {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 200px;
+}
+
 /* ---------------- Responsive ---------------- */
 
 @media (hover: none), (pointer: coarse), (max-width: 760px) {

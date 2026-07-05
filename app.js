@@ -1974,7 +1974,11 @@
 
     const key = event.currentTarget;
     const midi = Number(key.dataset.midi);
-    key.setPointerCapture(event.pointerId);
+    try {
+      key.setPointerCapture(event.pointerId);
+    } catch (error) {
+      /* sinteticki pointer (npr. Ucenje tab) nema aktivan pointer za capture */
+    }
 
     const isMouse = event.pointerType === "mouse";
 
