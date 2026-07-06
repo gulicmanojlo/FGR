@@ -432,6 +432,53 @@
     youtubeResumeTime: 0
   };
 
+  window.FGRBridge = {
+    getSelectedSong() {
+      return getSelectedSong();
+    },
+    getTime() {
+      const player = state.youtubePlayer;
+      return player && typeof player.getCurrentTime === "function" ? Number(player.getCurrentTime()) || 0 : 0;
+    },
+    seekTo(seconds) {
+      ensureSelectedVideoLoaded({ autoplay: false, keepDesired: true }).then((player) => {
+        if (player && typeof player.seekTo === "function") {
+          player.seekTo(Math.max(0, Number(seconds) || 0), true);
+        }
+      });
+    },
+    setRate(rate) {
+      const player = state.youtubePlayer;
+      if (player && typeof player.setPlaybackRate === "function") {
+        player.setPlaybackRate(Number(rate) || 1);
+      }
+    },
+    addChordToSelected(name, atSeconds) {
+      const song = getSelectedSong();
+      const chordName = String(name || "").trim();
+      if (!song || !chordName) {
+        return false;
+      }
+      const t = Math.max(0, Number(atSeconds));
+      song.chords = Array.isArray(song.chords) ? song.chords : [];
+      song.chords.push({ t: Math.round(t * 10) / 10, n: chordName });
+      song.chords.sort((a, b) => a.t - b.t);
+      saveRepertoire();
+      updateSelectedSongPanel();
+      return true;
+    },
+    removeChordFromSelected(index) {
+      const song = getSelectedSong();
+      if (!song || !Array.isArray(song.chords) || !song.chords[index]) {
+        return false;
+      }
+      song.chords.splice(index, 1);
+      saveRepertoire();
+      updateSelectedSongPanel();
+      return true;
+    }
+  };
+
   init();
 
   function init() {
@@ -933,12 +980,19 @@
   function normalizeSong(song) {
     const url = String(song?.url || "");
     const videoId = String(song?.videoId || parseYouTubeVideoId(url));
+    const chords = Array.isArray(song?.chords)
+      ? song.chords
+          .map((chord) => ({ t: Math.max(0, Number(chord?.t) || 0), n: String(chord?.n || "").trim() }))
+          .filter((chord) => chord.n)
+          .sort((a, b) => a.t - b.t)
+      : [];
     return {
       id: String(song?.id || createSongId()),
       title: String(song?.title || ""),
       key: String(song?.key || ""),
       url,
-      videoId
+      videoId,
+      chords
     };
   }
 
@@ -1098,7 +1152,8 @@
         title: song.title,
         key: song.key,
         url: song.url,
-        videoId: song.videoId
+        videoId: song.videoId,
+        ...(Array.isArray(song.chords) && song.chords.length ? { chords: song.chords } : {})
       }))
     };
   }
@@ -1200,6 +1255,51 @@
     updateSelectedSongPanel();
     loadSelectedSong({ autoplay: false });
     setYouTubeStatus("Dodato");
+  }
+
+  function renderCompactSongList() {
+    const listEl = document.getElementById("songList");
+    if (!listEl) {
+      return;
+    }
+    listEl.innerHTML = "";
+    const visibleSongs = getVisibleRepertoireSongs();
+    if (!visibleSongs.length) {
+      const empty = document.createElement("div");
+      empty.className = "song-list-empty";
+      empty.textContent = state.repertoire.length ? "Nema rezultata" : "Prazna playlist — dodaj pesmu";
+      listEl.append(empty);
+      return;
+    }
+    visibleSongs.forEach(({ song }) => {
+      const item = document.createElement("div");
+      item.className = "song-item" + (song.id === state.selectedSongId ? " on" : "");
+      item.dataset.songId = song.id;
+
+      const main = document.createElement("button");
+      main.type = "button";
+      main.className = "song-item-main";
+      const chordCount = Array.isArray(song.chords) ? song.chords.length : 0;
+      main.innerHTML =
+        '<span class="si-title"></span><span class="si-key"></span>' +
+        '<span class="si-sub">' + (chordCount ? "chart · " + chordCount + " akorada" : "samo link") + "</span>";
+      main.querySelector(".si-title").textContent = song.title || "(bez naziva)";
+      main.querySelector(".si-key").textContent = song.key || "";
+      main.addEventListener("click", () => selectSong(song.id));
+
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "song-item-del";
+      del.textContent = "×";
+      del.title = "Obrisi pesmu";
+      del.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deleteSong(song.id);
+      });
+
+      item.append(main, del);
+      listEl.append(item);
+    });
   }
 
   function renderRepertoire() {
@@ -1392,6 +1492,8 @@
     const song = getSelectedSong();
     selectedSongTitle.value = song?.title || "-";
     selectedSongKeyDisplay.value = song?.key ? `- ${song.key}` : "";
+    renderCompactSongList();
+    window.dispatchEvent(new CustomEvent("fgr:songchange", { detail: { song: song || null } }));
   }
 
   function getSelectedSong() {
