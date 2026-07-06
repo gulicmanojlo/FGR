@@ -467,6 +467,19 @@
       updateSelectedSongPanel();
       return true;
     },
+    setChordsForSelected(chords) {
+      const song = getSelectedSong();
+      if (!song || !Array.isArray(chords)) {
+        return false;
+      }
+      song.chords = chords
+        .map((chord) => ({ t: Math.max(0, Math.round((Number(chord?.t) || 0) * 10) / 10), n: String(chord?.n || "").trim() }))
+        .filter((chord) => chord.n)
+        .sort((a, b) => a.t - b.t);
+      saveRepertoire();
+      updateSelectedSongPanel();
+      return true;
+    },
     removeChordFromSelected(index) {
       const song = getSelectedSong();
       if (!song || !Array.isArray(song.chords) || !song.chords[index]) {

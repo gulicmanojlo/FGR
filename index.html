@@ -18,7 +18,7 @@
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=80">
+    <link rel="stylesheet" href="styles.css?v=81">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="FGR aplikacija">
@@ -252,12 +252,12 @@
 
           <!-- SKIDANJE PESME -->
           <section class="panel strip" aria-label="Skidanje pesme">
-            <div class="strip-head"><b>Skidanje pesme</b></div>
+            <div class="strip-head"><b>Skidanje pesme</b><span id="pipeStatus" class="pipe-status" aria-live="polite"></span></div>
             <div class="pipe">
-              <div class="pipe-s"><span class="n">1</span>Snimi jednom</div>
-              <div class="pipe-s"><span class="n">2</span>Razdvoji kanale</div>
-              <div class="pipe-s"><span class="n">3</span>Prepoznaj akorde</div>
-              <div class="pipe-s"><span class="n">4</span>Citaj iz memorije</div>
+              <button id="pipeRec" class="pipe-s" type="button" title="Pusti pesmu, podeli tab sa zvukom — snimak se pamti uz pesmu"><span class="n">1</span><span class="tt">Snimi jednom</span><span class="st" id="pipeRecSt"></span></button>
+              <button class="pipe-s" type="button" disabled title="Demucs u browseru — u izradi"><span class="n">2</span><span class="tt">Razdvoji kanale</span><span class="st">uskoro</span></button>
+              <button id="pipeChords" class="pipe-s" type="button" title="Analizira sacuvani snimak i upisuje akorde u chart"><span class="n">3</span><span class="tt">Prepoznaj akorde</span><span class="st" id="pipeChordsSt"></span></button>
+              <button id="pipeRead" class="pipe-s" type="button" title="Otvori chord chart ove pesme"><span class="n">4</span><span class="tt">Citaj iz memorije</span><span class="st" id="pipeReadSt"></span></button>
             </div>
             <div class="lab-grid">
               <a class="lab-card" href="chord-lab.html"><span class="ic">&#127925;</span><span class="tx"><span class="tt">Chord Lab</span><span class="dd">prepoznavanje iz zvuka</span></span><span class="badge live">Prototip</span></a>
@@ -321,7 +321,7 @@
       </div>
     </main>
 
-    <script src="ui-shell.js?v=80" defer></script>
-    <script src="app.js?v=80" defer></script>
+    <script src="ui-shell.js?v=81" defer></script>
+    <script src="app.js?v=81" defer></script>
   </body>
 </html>

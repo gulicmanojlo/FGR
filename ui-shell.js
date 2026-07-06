@@ -573,10 +573,214 @@
     });
   }, 600);
 
+  /* ---------- Skidanje: snimi jednom + prepoznaj akorde ---------- */
+  var DB_NAME = "fgr-capture", DB_STORE = "songs";
+  function openDb() {
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = function (e) {
+        if (!e.target.result.objectStoreNames.contains(DB_STORE)) e.target.result.createObjectStore(DB_STORE, { keyPath: "id" });
+      };
+      req.onsuccess = function (e) { resolve(e.target.result); };
+      req.onerror = function (e) { reject(e.target.error); };
+    });
+  }
+  function dbPut(item) {
+    return openDb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(DB_STORE, "readwrite");
+        tx.objectStore(DB_STORE).put(item);
+        tx.oncomplete = resolve; tx.onerror = function (e) { reject(e.target.error); };
+      });
+    });
+  }
+  function dbGet(id) {
+    return openDb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var req = db.transaction(DB_STORE).objectStore(DB_STORE).get(id);
+        req.onsuccess = function () { resolve(req.result || null); };
+        req.onerror = function (e) { reject(e.target.error); };
+      });
+    });
+  }
+  function recId() { return currentSong ? "song-" + currentSong.id : null; }
+  function pipeStatus(text) { if ($("pipeStatus")) $("pipeStatus").textContent = text || ""; }
+
+  function refreshPipe() {
+    var recSt = $("pipeRecSt"), chSt = $("pipeChordsSt"), rdSt = $("pipeReadSt");
+    var chords = currentSong && Array.isArray(currentSong.chords) ? currentSong.chords.length : 0;
+    if (chSt) { chSt.textContent = chords ? "✓ " + chords : ""; chSt.classList.toggle("ok", chords > 0); }
+    if (rdSt) { rdSt.textContent = chords ? "✓ spremno" : ""; rdSt.classList.toggle("ok", chords > 0); }
+    if (!recSt) return;
+    var id = recId();
+    if (!id) { recSt.textContent = ""; return; }
+    dbGet(id).then(function (item) {
+      recSt.textContent = item ? "✓ " + fmtTime(item.dur) : "";
+      recSt.classList.toggle("ok", !!item);
+    }).catch(function () {});
+  }
+  window.addEventListener("fgr:songchange", refreshPipe);
+
+  var capStream = null, capRec = null, capChunks = [], capStart = 0, capTimer = null;
+  function stopCapture() {
+    if (capRec && capRec.state !== "inactive") capRec.stop();
+    if (capStream) capStream.getTracks().forEach(function (t) { t.stop(); });
+    if (capTimer) { clearInterval(capTimer); capTimer = null; }
+    var btn = $("pipeRec");
+    if (btn) { btn.classList.remove("rec"); btn.querySelector(".tt").textContent = "Snimi jednom"; }
+  }
+  if ($("pipeRec")) $("pipeRec").addEventListener("click", function () {
+    if (capRec && capRec.state === "recording") { stopCapture(); return; }
+    if (!currentSong) { pipeStatus("Prvo izaberi pesmu u repertoaru."); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { pipeStatus("Deljenje taba ne radi u ovom browseru (Chrome/Edge desktop)."); return; }
+    navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(function (stream) {
+      if (!stream.getAudioTracks().length) {
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        pipeStatus("Nema zvuka — pri deljenju čekiraj „Deli audio taba”.");
+        return;
+      }
+      capStream = stream;
+      var audioStream = new MediaStream([stream.getAudioTracks()[0]]);
+      var mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
+      capRec = new MediaRecorder(audioStream, { mimeType: mime });
+      capChunks = [];
+      capRec.ondataavailable = function (e) { if (e.data.size) capChunks.push(e.data); };
+      capRec.onstop = function () {
+        var blob = new Blob(capChunks, { type: capChunks[0] ? capChunks[0].type : "audio/webm" });
+        var dur = Math.round((Date.now() - capStart) / 1000);
+        var id = recId();
+        if (!id || dur < 3) { pipeStatus("Snimak prekratak — nije sačuvan."); return; }
+        dbPut({ id: id, blob: blob, dur: dur, at: Date.now() }).then(function () {
+          pipeStatus("Snimljeno " + fmtTime(dur) + " — sada klikni „3 Prepoznaj akorde”.");
+          refreshPipe();
+        }).catch(function (err) { pipeStatus("Greška pri čuvanju: " + err.message); });
+      };
+      capRec.start(1000);
+      capStart = Date.now();
+      var btn = $("pipeRec");
+      btn.classList.add("rec");
+      capTimer = setInterval(function () {
+        btn.querySelector(".tt").textContent = "■ Zaustavi (" + fmtTime((Date.now() - capStart) / 1000) + ")";
+      }, 500);
+      pipeStatus("Snima… pusti pesmu do kraja pa klikni „Zaustavi”.");
+      stream.getAudioTracks()[0].onended = stopCapture;
+    }).catch(function (err) { pipeStatus("Otkazano: " + err.message); });
+  });
+
+  /* offline analiza: hromagram preko OfflineAudioContext suspend/resume */
+  var AN_TEMPLATES = [["", [0, 4, 7]], ["m", [0, 3, 7]], ["7", [0, 4, 7, 10]], ["m7", [0, 3, 7, 10]], ["maj7", [0, 4, 7, 11]], ["dim", [0, 3, 6]], ["sus4", [0, 5, 7]]];
+  var AN_VECS = [];
+  AN_TEMPLATES.forEach(function (tpl) {
+    for (var r = 0; r < 12; r++) {
+      var vec = new Array(12).fill(0);
+      tpl[1].forEach(function (iv) { vec[(r + iv) % 12] = 1; });
+      AN_VECS.push({ name: NOTE[r] + tpl[0], vec: vec, norm: Math.sqrt(tpl[1].length) });
+    }
+  });
+  function chromaFromSpectrum(dbArr, sampleRate, fftSize) {
+    var chroma = new Array(12).fill(0);
+    for (var i = 0; i < dbArr.length; i++) {
+      var freq = i * sampleRate / fftSize;
+      if (freq < 60) continue;
+      if (freq > 2200) break;
+      var mag = Math.pow(10, dbArr[i] / 20);
+      if (!isFinite(mag) || mag < 1e-7) continue;
+      var midi = 69 + 12 * Math.log2(freq / 440);
+      chroma[((Math.round(midi) % 12) + 12) % 12] += mag;
+    }
+    return chroma;
+  }
+  function bestChord(chroma) {
+    var max = Math.max.apply(null, chroma);
+    if (!(max > 1e-4)) return null;
+    var norm = chroma.map(function (v) { return v / max; });
+    var len = Math.sqrt(norm.reduce(function (s, v) { return s + v * v; }, 0)) || 1;
+    var best = null, bestScore = -1;
+    AN_VECS.forEach(function (c) {
+      var dot = 0;
+      for (var i = 0; i < 12; i++) dot += norm[i] * c.vec[i];
+      var score = dot / (len * c.norm);
+      if (score > bestScore) { bestScore = score; best = c.name; }
+    });
+    return bestScore > 0.68 ? best : null;
+  }
+  function analyzeBuffer(buffer, onProgress) {
+    var HOP = 0.25, FFT = 8192;
+    var ctx = new OfflineAudioContext(1, buffer.length, buffer.sampleRate);
+    var source = ctx.createBufferSource();
+    source.buffer = buffer;
+    var analyser = ctx.createAnalyser();
+    analyser.fftSize = FFT;
+    analyser.smoothingTimeConstant = 0.4;
+    source.connect(analyser);
+    analyser.connect(ctx.destination);
+    source.start();
+    var frames = [];
+    var duration = buffer.duration;
+    for (var t = HOP; t < duration; t += HOP) {
+      (function (at) {
+        ctx.suspend(at).then(function () {
+          var arr = new Float32Array(analyser.frequencyBinCount);
+          analyser.getFloatFrequencyData(arr);
+          frames.push({ t: at, chord: bestChord(chromaFromSpectrum(arr, buffer.sampleRate, FFT)) });
+          if (onProgress && frames.length % 40 === 0) onProgress(at / duration);
+          ctx.resume();
+        });
+      })(t);
+    }
+    return ctx.startRendering().then(function () {
+      frames.sort(function (a, b) { return a.t - b.t; });
+      /* stabilizacija: akord vazi tek kad traje >= 3 uzastopna okvira (0.75s) */
+      var out = [], run = null;
+      frames.forEach(function (frame) {
+        if (!frame.chord) return;
+        if (run && run.chord === frame.chord) { run.count++; run.end = frame.t; return; }
+        if (run && run.count >= 3 && (!out.length || out[out.length - 1].n !== run.chord)) {
+          out.push({ t: Math.round((run.start - HOP) * 10) / 10, n: run.chord });
+        }
+        run = { chord: frame.chord, count: 1, start: frame.t, end: frame.t };
+      });
+      if (run && run.count >= 3 && (!out.length || out[out.length - 1].n !== run.chord)) {
+        out.push({ t: Math.round((run.start - HOP) * 10) / 10, n: run.chord });
+      }
+      return out;
+    });
+  }
+  window.FGRAnalyzeBuffer = analyzeBuffer;
+
+  if ($("pipeChords")) $("pipeChords").addEventListener("click", function () {
+    if (!currentSong) { pipeStatus("Prvo izaberi pesmu."); return; }
+    var id = recId();
+    dbGet(id).then(function (item) {
+      if (!item) { pipeStatus("Nema snimka za ovu pesmu — prvo „1 Snimi jednom”."); return; }
+      pipeStatus("Analiziram snimak… (može potrajati)");
+      var actx = new (window.AudioContext || window.webkitAudioContext)();
+      return item.blob.arrayBuffer().then(function (data) {
+        return actx.decodeAudioData(data);
+      }).then(function (buffer) {
+        return analyzeBuffer(buffer, function (p) { pipeStatus("Analiziram… " + Math.round(p * 100) + "%"); });
+      }).then(function (chords) {
+        actx.close().catch(function () {});
+        if (!chords.length) { pipeStatus("Nisam uspeo da prepoznam akorde iz ovog snimka."); return; }
+        if (currentSong.chords && currentSong.chords.length && !confirm("Pesma već ima " + currentSong.chords.length + " akorada u chartu. Da ih zamenim sa " + chords.length + " prepoznatih?")) {
+          pipeStatus(""); return;
+        }
+        if (window.FGRBridge && window.FGRBridge.setChordsForSelected(chords)) {
+          pipeStatus("Upisano " + chords.length + " akorada u chart. Proveri ih i ispravi po sluhu.");
+          if (prefs.tool === "chart") renderTool();
+          refreshPipe();
+        }
+      });
+    }).catch(function (err) { pipeStatus("Greška: " + err.message); });
+  });
+
+  if ($("pipeRead")) $("pipeRead").addEventListener("click", function () { selectTool("chart"); });
+
   /* ---------- start ---------- */
   applyTheme();
   updateToneCard();
   renderMiniChart();
+  refreshPipe();
   if (chipsWrap) {
     Array.prototype.forEach.call(chipsWrap.children, function (chip) {
       chip.classList.toggle("on", chip.dataset.m === prefs.tool);

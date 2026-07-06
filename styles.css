@@ -2266,3 +2266,21 @@ a.feature-card:hover {
 .key.black.scale-hint .key-label, .key.black.root-hint .key-label { color: #ffe9b8; }
 
 .key.midi-held { outline: 3px solid var(--active); outline-offset: -3px; }
+
+/* ---- interaktivni pipeline ---- */
+
+.pipe-status { margin-left: 10px; font-size: 11px; color: var(--accent-strong); font-weight: 700; text-transform: none; letter-spacing: 0; }
+
+button.pipe-s { cursor: pointer; text-align: left; font: inherit; color: var(--ink-2); }
+
+button.pipe-s:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); }
+
+button.pipe-s:disabled { opacity: 0.55; cursor: not-allowed; }
+
+button.pipe-s.rec { border-color: #e0574f; color: #ffb4ae; }
+
+.pipe-s .tt { font-weight: 700; }
+
+.pipe-s .st { margin-left: auto; font-size: 10px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+
+.pipe-s .st.ok { color: #7fd695; }
