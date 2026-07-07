@@ -2525,10 +2525,6 @@ button.pipe-s.rec { border-color: #e0574f; color: #ffb4ae; }
   white-space: nowrap;
 }
 
-/* ---- v83: nas snimak player red ---- */
-
-.rec-row {
-
 .key.black.scale-hint .key-label, .key.black.root-hint .key-label { color: #ffe9b8; }
 
 .key.midi-held { outline: 3px solid var(--active); outline-offset: -3px; }
