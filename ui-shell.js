@@ -7,6 +7,28 @@
   var NOTE = ["C", "Cis", "D", "Dis", "E", "F", "Fis", "G", "Gis", "A", "B", "H"];
   var TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
   var SUFFIX = { maj: "", min: "m", dim: "°" };
+  var CHORD_VARIANTS = {
+    triad: { label: "Osnovni", short: "", suffix: { maj: "", min: "m", dim: "°" } },
+    "7": { label: "7", short: "7", suffix: { maj: "7", min: "m7", dim: "m7b5" } },
+    "9": { label: "9", short: "9", suffix: { maj: "9", min: "m9", dim: "dim9" } },
+    sus: { label: "sus", short: "sus", suffix: { maj: "sus", min: "sus", dim: "sus" } },
+    maj7: { label: "maj7", short: "maj", suffix: { maj: "maj7", min: "m maj7", dim: "dim maj7" } },
+    dim: { label: "dim", short: "dim", suffix: { maj: "dim", min: "dim", dim: "dim" } }
+  };
+  var CHORD_VARIANT_GROUPS = {
+    triad: ["triad"],
+    "7": ["7"],
+    "9": ["9"],
+    sus: ["sus"],
+    maj7: ["maj7"],
+    dim: ["dim"],
+    all: ["triad", "7", "9", "sus", "maj7", "dim"]
+  };
+  var INTERVAL_DRILLS = [
+    ["mala sekunda", 1], ["velika sekunda", 2], ["mala terca", 3], ["velika terca", 4],
+    ["kvarta", 5], ["tritonus", 6], ["kvinta", 7], ["mala seksta", 8],
+    ["velika seksta", 9], ["mala septima", 10], ["velika septima", 11], ["oktava", 12]
+  ];
   var MAJOR_DEGREES = [
     ["I", "maj", 0], ["ii", "min", 2], ["iii", "min", 4], ["IV", "maj", 5],
     ["V", "maj", 7], ["vi", "min", 9], ["vii°", "dim", 11]
@@ -28,12 +50,13 @@
 
   /* ---------- prefs ---------- */
   var STORAGE_KEY = "fgr-ui-v1";
-  var prefs = { theme: "dark", tool: "akordi" };
+  var prefs = { theme: "dark", tool: "akordi", scaleAllOctaves: false };
   try {
     var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
     if (saved && typeof saved === "object") {
       if (saved.theme === "light" || saved.theme === "dark") prefs.theme = saved.theme;
       if (typeof saved.tool === "string") prefs.tool = saved.tool;
+      if (typeof saved.scaleAllOctaves === "boolean") prefs.scaleAllOctaves = saved.scaleAllOctaves;
     }
   } catch (e) {}
   function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)); } catch (e) {} }
@@ -103,9 +126,49 @@
   function selectedRootMidi(rootPc) {
     return (selectedOctave() + 1) * 12 + rootPc;
   }
-  function chordMidis(rootPc, type) {
+  function uniqueSortedIntervals(intervals) {
+    return Array.from(new Set(intervals)).sort(function (a, b) { return a - b; });
+  }
+  function chordIntervals(quality, variantId) {
+    if (variantId === "sus") return [0, 5, 7];
+    if (variantId === "dim") return [0, 3, 6];
+    if (variantId === "maj7") return [0, quality === "min" ? 3 : 4, quality === "dim" ? 6 : 7, 11];
+
+    var base = TRIAD[quality] || TRIAD.maj;
+    if (variantId === "7" || variantId === "9") {
+      var seventh = 10;
+      var out = base.concat([seventh]);
+      if (variantId === "9") out.push(14);
+      return uniqueSortedIntervals(out);
+    }
+    return base.slice();
+  }
+  function chordName(rootPc, quality, variantId) {
+    var variant = CHORD_VARIANTS[variantId] || CHORD_VARIANTS.triad;
+    return NOTE[rootPc] + (variant.suffix[quality] || variant.suffix.maj || "");
+  }
+  function inversionLabel(step) {
+    if (!step) return "osnovni hvat";
+    return step + ". obrt";
+  }
+  function applyInversion(intervals, step) {
+    var out = uniqueSortedIntervals(intervals);
+    var maxStep = Math.max(0, out.length - 1);
+    var count = Math.max(0, Math.min(maxStep, Number(step) || 0));
+    for (var i = 0; i < count; i++) {
+      out.push(out.shift() + 12);
+    }
+    return out;
+  }
+  function chordMidisFromIntervals(rootPc, intervals, inversion) {
     var base = selectedRootMidi(rootPc);
-    return TRIAD[type].map(function (iv) { return base + iv; });
+    return applyInversion(intervals, inversion).map(function (iv) { return base + iv; });
+  }
+  function chordMidis(rootPc, type) {
+    return chordMidisFromIntervals(rootPc, TRIAD[type] || TRIAD.maj, 0);
+  }
+  function noteNamesForIntervals(rootPc, intervals) {
+    return uniqueSortedIntervals(intervals).map(function (iv) { return NOTE[(rootPc + iv) % 12]; }).join(" ");
   }
   function pressKeys(midis, holdMs, card) {
     var keys = midis.map(function (m) { return document.querySelector('.key[data-midi="' + m + '"]'); }).filter(Boolean);
@@ -134,15 +197,22 @@
   }
   function renderHint(hint) {
     var base = selectedRootMidi(hint.rootPc);
-    var rootMidi = base;
-    var midis = hint.intervals.map(function (iv) { return base + iv; });
+    var midis = hint.midis ? hint.midis.slice() : hint.intervals.map(function (iv) { return base + iv; });
+    var pcs = new Set(midis.map(function (m) { return ((m % 12) + 12) % 12; }));
     document.querySelectorAll("#keyboard .key.root-hint, #keyboard .key.scale-hint").forEach(function (key) {
       key.classList.remove("root-hint", "scale-hint");
     });
-    midis.forEach(function (m) {
-      var key = document.querySelector('.key[data-midi="' + m + '"]');
-      if (key) key.classList.add(m === rootMidi ? "root-hint" : "scale-hint");
-    });
+    if (hint.allOctaves) {
+      document.querySelectorAll("#keyboard .key").forEach(function (key) {
+        var pc = ((Number(key.dataset.midi) % 12) + 12) % 12;
+        if (pcs.has(pc)) key.classList.add("scale-hint");
+      });
+    } else {
+      midis.forEach(function (m) {
+        var key = document.querySelector('.key[data-midi="' + m + '"]');
+        if (key) key.classList.add("scale-hint");
+      });
+    }
     if ($("dockScaleName")) $("dockScaleName").textContent = hint.label || "";
   }
   function paintScale(rootPc, intervals, label, options) {
@@ -151,7 +221,23 @@
       rootPc: rootPc,
       intervals: intervals.slice(),
       label: label || "",
-      autoClear: !!(options && options.autoClear)
+      autoClear: !!(options && options.autoClear),
+      allOctaves: !!(options && options.allOctaves)
+    };
+    renderHint(activeHint);
+    if (activeHint.autoClear) {
+      hintClearTimer = window.setTimeout(clearScale, options && options.holdMs ? options.holdMs : 900);
+    }
+  }
+  function paintMidis(midis, label, options) {
+    clearHintTimer();
+    activeHint = {
+      rootPc: midis.length ? ((midis[0] % 12) + 12) % 12 : 0,
+      intervals: [],
+      midis: midis.slice(),
+      label: label || "",
+      autoClear: !!(options && options.autoClear),
+      allOctaves: !!(options && options.allOctaves)
     };
     renderHint(activeHint);
     if (activeHint.autoClear) {
@@ -220,7 +306,7 @@
     }
     updateToneCard();
     renderMiniChart();
-    if (prefs.tool === "akordi" || prefs.tool === "chart" || prefs.tool === "vezba") renderTool();
+    if (prefs.tool === "akordi" || prefs.tool === "chart" || prefs.tool === "skale" || prefs.tool === "vezba") renderTool();
   });
 
   /* ---------- "Svira se" ogledalo ---------- */
@@ -305,13 +391,20 @@
     var st = event.data[0], d1 = event.data[1], d2 = event.data[2];
     var cmd = st & 0xF0;
     var changed = false;
-    if (cmd === 0x90 && d2 > 0) { midiHeld.add(d1); changed = true; }
+    var isDown = cmd === 0x90 && d2 > 0;
+    if (isDown) { midiHeld.add(d1); changed = true; }
     else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) { midiHeld.delete(d1); changed = true; }
     if (!changed) return;
     var key = document.querySelector('.key[data-midi="' + d1 + '"]');
     if (key) key.classList.toggle("midi-held", midiHeld.has(d1));
     syncStage();
-    if (midiOnChord) midiOnChord(midiPcSet());
+    if (midiOnChord) midiOnChord(midiPcSet(), {
+      down: isDown,
+      midi: d1,
+      pc: ((d1 % 12) + 12) % 12,
+      midis: Array.from(midiHeld),
+      source: "midi"
+    });
   }
   function bindMidi(access) {
     var first = null, count = 0;
@@ -361,6 +454,16 @@
   }
   if ($("midiBadge")) $("midiBadge").addEventListener("click", function () { connectMidi(false); });
   if ($("midiConnectBtn")) $("midiConnectBtn").addEventListener("click", function () { connectMidi(false); });
+  window.addEventListener("fgr:playchange", function (event) {
+    if (!midiOnChord) return;
+    var pcs = event.detail && Array.isArray(event.detail.pcs) ? event.detail.pcs : [];
+    midiOnChord(new Set(pcs), {
+      down: pcs.length > 0,
+      pcs: pcs,
+      midis: event.detail && Array.isArray(event.detail.midis) ? event.detail.midis : [],
+      source: "app"
+    });
+  });
 
   /* ---------- naziv akorda -> tonovi (za crtanje hvata) ---------- */
   var NAME_SUFFIX = { "": [0, 4, 7], "m": [0, 3, 7], "dim": [0, 3, 6], "°": [0, 3, 6], "sus4": [0, 5, 7], "sus2": [0, 2, 7],
@@ -683,6 +786,269 @@
         if (name && window.FGRBridge.addChordToSelected(name, t)) TOOLS.chart();
       });
     }
+  };
+
+  TOOLS.akordi = function () {
+    toolBody.innerHTML = '<div class="scale-head">' + keyPickerHTML("ak") +
+      '<label>Tip <select id="akVariant">' +
+      '<option value="all">Sve</option><option value="triad">Osnovni</option><option value="7">7</option><option value="9">9</option>' +
+      '<option value="sus">sus</option><option value="maj7">maj7</option><option value="dim">dim</option></select></label>' +
+      '<label>Hvat <select id="akInversion">' +
+      '<option value="0">osnovni</option><option value="1">1. obrt</option><option value="2">2. obrt</option><option value="3">3. obrt</option></select></label>' +
+      '<span class="tool-note" style="margin:0 0 0 auto">klik na akord - odsvira se izabrani hvat na klaviru dole</span></div>' +
+      '<div class="deg-row expanded" id="akRow"></div>';
+    var read = initKeyPicker("ak", renderRow);
+    var akVariant = $("akVariant");
+    var akInversion = $("akInversion");
+    akVariant.addEventListener("change", renderRow);
+    akInversion.addEventListener("change", renderRow);
+
+    function renderRow() {
+      var k = read();
+      var degrees = k.minor ? MINOR_DEGREES : MAJOR_DEGREES;
+      var variantIds = CHORD_VARIANT_GROUPS[akVariant.value] || CHORD_VARIANT_GROUPS.all;
+      var inversion = Number(akInversion.value) || 0;
+      var row = $("akRow");
+      row.innerHTML = "";
+      degrees.forEach(function (d) {
+        var pc = (k.pc + d[2]) % 12;
+        variantIds.forEach(function (variantId) {
+          var intervals = chordIntervals(d[1], variantId);
+          var midis = chordMidisFromIntervals(pc, intervals, inversion);
+          var name = chordName(pc, d[1], variantId);
+          var actualInversion = Math.min(inversion, Math.max(0, midis.length - 1));
+          var card = document.createElement("button");
+          card.type = "button";
+          card.className = "deg" + (d[3] ? " alt" : "");
+          card.innerHTML = '<span class="r">' + d[0] + (variantId === "triad" ? "" : " · " + CHORD_VARIANTS[variantId].label) + '</span>' +
+            '<span class="nm">' + name + "</span>" +
+            '<span class="nt">' + noteNamesForIntervals(pc, intervals) + " · " + inversionLabel(actualInversion) + "</span>";
+          card.addEventListener("click", function () {
+            pressKeys(midis, 700, card);
+            paintMidis(midis, name + " · " + inversionLabel(actualInversion), { autoClear: true, holdMs: 900 });
+          });
+          row.appendChild(card);
+        });
+      });
+    }
+
+    renderRow();
+  };
+
+  TOOLS.skale = function () {
+    toolBody.innerHTML = '<div class="scale-head"><label>Osnova <select id="scRoot"></select></label>' +
+      '<label>Skala <select id="scType"></select></label>' +
+      '<label class="toggle-row inline-toggle"><input id="scAllOctaves" type="checkbox"><span>Ceo klavir</span></label>' +
+      '<button class="text-button mini" id="scPlay" type="button">&#9654; Odsviraj</button>' +
+      '<button class="text-button mini" id="scClear" type="button">Obrisi oznake</button></div>' +
+      '<div class="formula" id="scFormula"></div>' +
+      '<p class="tool-note">Oznaceni tonovi su prikazani jednako. Opcija <b>Ceo klavir</b> ponavlja iste tonove kroz sve oktave.</p>';
+    var scRoot = $("scRoot"), scType = $("scType"), scAllOctaves = $("scAllOctaves");
+    NOTE.forEach(function (n, i) { scRoot.add(new Option(n, i)); });
+    Object.keys(SCALES).forEach(function (k) { scType.add(new Option(k, k)); });
+    var k = shownKey();
+    scRoot.value = String(k.pc);
+    scType.value = k.minor ? "harmonijski mol" : "dur";
+    scAllOctaves.checked = prefs.scaleAllOctaves;
+
+    function update() {
+      var pc = Number(scRoot.value) || 0;
+      var ivs = SCALES[scType.value];
+      paintScale(pc, ivs, NOTE[pc] + " " + scType.value, { allOctaves: prefs.scaleAllOctaves });
+      $("scFormula").innerHTML = ivs.map(function (iv) {
+        return '<span class="fstep">' + NOTE[(pc + iv) % 12] + "</span>";
+      }).join("");
+    }
+    scRoot.addEventListener("change", update);
+    scType.addEventListener("change", update);
+    scAllOctaves.addEventListener("change", function () {
+      prefs.scaleAllOctaves = scAllOctaves.checked;
+      save();
+      update();
+    });
+    $("scClear").addEventListener("click", clearScale);
+    $("scPlay").addEventListener("click", function () {
+      var pc = Number(scRoot.value) || 0;
+      var ivs = SCALES[scType.value].concat([12]);
+      var base = selectedRootMidi(pc);
+      ivs.forEach(function (iv, i) {
+        setTimeout(function () { pressKeys([base + iv], 240); }, i * 280);
+      });
+    });
+    update();
+  };
+
+  TOOLS.vezba = function () {
+    toolBody.innerHTML = '<div class="practice expanded-practice">' +
+      '<div class="practice-controls"><label>Tip vezbe <select id="vzMode">' +
+      '<option value="all">Sve</option><option value="chord">Akordi i obrtaji</option><option value="scale">Skale</option>' +
+      '<option value="interval">Intervali</option><option value="degree">Stepeni tonaliteta</option></select></label>' +
+      '<button class="text-button mini" id="vzNew" type="button">Novi zadatak</button>' +
+      '<button class="text-button mini" id="vzSkip" type="button">Preskoci</button></div>' +
+      '<div class="streak"><span>Niz: <b id="vzStreak">0</b></span><span>Tacno: <b id="vzScore">0/0</b></span>' +
+      '<span>Tonalitet: <b id="vzKey"></b></span></div>' +
+      '<div class="task"><div><div class="q" id="vzPrompt">Zadatak</div><div class="big" id="vzTask">-</div>' +
+      '<div class="practice-answer" id="vzAnswer"></div></div><span class="st" id="vzState">ceka...</span></div>' +
+      '<div class="practice-progress" id="vzProgress"></div>' +
+      '<p class="tool-note"><b>Vezbe:</b> akordi sa 7/9/sus/maj/dim i obrtajima, skale, intervali i stepeni tonaliteta. Radi preko MIDI klavijature i preko klavira dole.</p></div>';
+
+    var k = shownKey();
+    var modeSelect = $("vzMode");
+    var degrees = k.minor ? MINOR_DEGREES : MAJOR_DEGREES;
+    var streak = 0, good = 0, total = 0, target = null, lock = false, inputHistory = new Set();
+    $("vzKey").textContent = formatKey(k.pc, k.minor);
+
+    function rand(items) {
+      return items[Math.floor(Math.random() * items.length)];
+    }
+    function pcsFrom(rootPc, intervals) {
+      return Array.from(new Set(intervals.map(function (iv) { return (rootPc + iv) % 12; })));
+    }
+    function degreeName(d) {
+      return d[0].replace(" dur", "");
+    }
+    function taskKinds() {
+      return modeSelect.value === "all" ? ["chord", "scale", "interval", "degree"] : [modeSelect.value];
+    }
+    function makeChordTask() {
+      var d = rand(degrees);
+      var pc = (k.pc + d[2]) % 12;
+      var variantId = rand(["triad", "7", "9", "sus", "maj7", "dim"]);
+      var intervals = chordIntervals(d[1], variantId);
+      var inversion = Math.min(rand([0, 1, 2, 3]), Math.max(0, intervals.length - 1));
+      var midis = chordMidisFromIntervals(pc, intervals, inversion);
+      var name = chordName(pc, d[1], variantId);
+      return {
+        kind: "chord",
+        prompt: "Odsviraj akord",
+        title: name + " · " + inversionLabel(inversion),
+        answer: degreeName(d) + " stepen · " + noteNamesForIntervals(pc, intervals),
+        pcs: pcsFrom(pc, intervals),
+        exact: true,
+        bassPc: ((midis[0] % 12) + 12) % 12,
+        midis: midis
+      };
+    }
+    function makeScaleTask() {
+      var names = Object.keys(SCALES);
+      var scaleName = rand(names);
+      var rootPc = Math.random() < 0.65 ? k.pc : (k.pc + rand(degrees)[2]) % 12;
+      var intervals = SCALES[scaleName];
+      return {
+        kind: "scale",
+        prompt: "Odsviraj tonove skale",
+        title: NOTE[rootPc] + " " + scaleName,
+        answer: intervals.map(function (iv) { return NOTE[(rootPc + iv) % 12]; }).join(" "),
+        pcs: pcsFrom(rootPc, intervals),
+        accumulate: true,
+        rootPc: rootPc,
+        intervals: intervals
+      };
+    }
+    function makeIntervalTask() {
+      var d = rand(degrees);
+      var rootPc = (k.pc + d[2]) % 12;
+      var interval = rand(INTERVAL_DRILLS);
+      return {
+        kind: "interval",
+        prompt: "Odsviraj interval",
+        title: NOTE[rootPc] + " + " + interval[0],
+        answer: NOTE[rootPc] + " - " + NOTE[(rootPc + interval[1]) % 12],
+        pcs: pcsFrom(rootPc, [0, interval[1]]),
+        accumulate: true,
+        midis: chordMidisFromIntervals(rootPc, [0, interval[1]], 0)
+      };
+    }
+    function makeDegreeTask() {
+      var d = rand(degrees);
+      var pc = (k.pc + d[2]) % 12;
+      return {
+        kind: "degree",
+        prompt: "Pronadji stepen tonaliteta",
+        title: degreeName(d) + " u " + formatKey(k.pc, k.minor),
+        answer: NOTE[pc],
+        pcs: [pc],
+        accumulate: true,
+        midis: [selectedRootMidi(pc)]
+      };
+    }
+    function makeTask() {
+      var kind = rand(taskKinds());
+      if (kind === "scale") return makeScaleTask();
+      if (kind === "interval") return makeIntervalTask();
+      if (kind === "degree") return makeDegreeTask();
+      return makeChordTask();
+    }
+    function updateProgress() {
+      if (!target) return;
+      var done = target.pcs.filter(function (pc) { return inputHistory.has(pc); });
+      $("vzProgress").textContent = target.accumulate && done.length
+        ? "Pogodjeno: " + done.map(function (pc) { return NOTE[pc]; }).join(" ") + " (" + done.length + "/" + target.pcs.length + ")"
+        : "";
+    }
+    function paintTask() {
+      if (target.kind === "scale") {
+        paintScale(target.rootPc, target.intervals, target.title, { allOctaves: prefs.scaleAllOctaves });
+      } else {
+        paintMidis(target.midis || target.pcs.map(selectedRootMidi), target.title);
+      }
+    }
+    function newTask() {
+      inputHistory = new Set();
+      target = makeTask();
+      lock = false;
+      $("vzPrompt").textContent = target.prompt;
+      $("vzTask").textContent = target.title;
+      $("vzAnswer").textContent = target.answer;
+      $("vzState").textContent = "ceka...";
+      $("vzState").classList.remove("good", "bad");
+      $("vzProgress").textContent = "";
+      paintTask();
+    }
+    function markDone() {
+      lock = true;
+      streak++; good++; total++;
+      $("vzStreak").textContent = streak;
+      $("vzScore").textContent = good + "/" + total;
+      $("vzState").textContent = "Tacno!";
+      $("vzState").classList.remove("bad");
+      $("vzState").classList.add("good");
+      window.setTimeout(newTask, 850);
+    }
+    function check(pcSet, meta) {
+      if (lock || !target) return;
+      if (meta && meta.down && Number.isFinite(meta.pc)) inputHistory.add(meta.pc);
+      pcSet.forEach(function (pc) { inputHistory.add(pc); });
+      updateProgress();
+
+      var ok = false;
+      if (target.exact) {
+        ok = target.pcs.every(function (pc) { return pcSet.has(pc); }) && pcSet.size === target.pcs.length;
+        if (ok && target.bassPc !== undefined && meta && Array.isArray(meta.midis) && meta.midis.length) {
+          var bassMidi = meta.midis.reduce(function (a, b) { return a < b ? a : b; });
+          ok = ((bassMidi % 12) + 12) % 12 === target.bassPc;
+        }
+        if (!ok && pcSet.size >= target.pcs.length) {
+          $("vzState").textContent = "probaj drugi hvat / obrt";
+          $("vzState").classList.add("bad");
+        }
+      } else {
+        ok = target.pcs.every(function (pc) { return inputHistory.has(pc); });
+      }
+      if (ok) markDone();
+    }
+
+    midiOnChord = check;
+    modeSelect.addEventListener("change", newTask);
+    $("vzNew").addEventListener("click", newTask);
+    $("vzSkip").addEventListener("click", function () {
+      streak = 0; total++;
+      $("vzStreak").textContent = "0";
+      $("vzScore").textContent = good + "/" + total;
+      newTask();
+    });
+    connectMidi(true);
+    newTask();
   };
 
   function renderTool() {

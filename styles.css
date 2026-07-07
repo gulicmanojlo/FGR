@@ -2114,6 +2114,8 @@ a.feature-card:hover {
 
 .deg-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 7px; }
 
+.deg-row.expanded { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); }
+
 .deg {
   display: grid;
   gap: 2px;
@@ -2158,9 +2160,49 @@ a.feature-card:hover {
 
 .task .st.good { color: #58c97a; }
 
+.task .st.bad { color: #ffb36c; }
+
 .streak { display: flex; gap: 12px; font-size: 11.5px; color: var(--muted); flex-wrap: wrap; }
 
 .streak b { color: var(--accent-strong); font-family: ui-monospace, Menlo, monospace; }
+
+.inline-toggle {
+  min-height: 30px;
+}
+
+.expanded-practice {
+  max-width: none;
+}
+
+.practice-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.practice-controls label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.practice-answer,
+.practice-progress {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.practice-progress {
+  min-height: 15px;
+  font-family: ui-monospace, Menlo, monospace;
+  color: var(--accent-strong);
+}
 
 .cc-strip { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 3px; }
 
@@ -2362,15 +2404,13 @@ a.feature-card:hover {
 
 /* skala nacrtana na pravom klaviru */
 
-.key.white.scale-hint { background: linear-gradient(90deg, rgba(0,0,0,0.06), transparent 12%, transparent 88%, rgba(0,0,0,0.06)), linear-gradient(#f9edcb, #ecd9a3); }
-
-.key.white.root-hint { background: linear-gradient(90deg, rgba(0,0,0,0.06), transparent 12%, transparent 88%, rgba(0,0,0,0.06)), linear-gradient(#fbe7ae, var(--active)); }
+.key.white.scale-hint,
+.key.white.root-hint { background: linear-gradient(90deg, rgba(0,0,0,0.06), transparent 12%, transparent 88%, rgba(0,0,0,0.06)), linear-gradient(#f9edcb, #ecd9a3); }
 
 .key.white.scale-hint .key-label, .key.white.root-hint .key-label { color: #4a2f00; }
 
-.key.black.scale-hint { background: linear-gradient(180deg, #8a6d2c, #5e4a1c); }
-
-.key.black.root-hint { background: linear-gradient(180deg, #c9a24a, var(--active-deep)); box-shadow: 0 0 14px -2px var(--active); }
+.key.black.scale-hint,
+.key.black.root-hint { background: linear-gradient(180deg, #8a6d2c, #5e4a1c); }
 
 .key.black.scale-hint .key-label, .key.black.root-hint .key-label { color: #ffe9b8; }
 

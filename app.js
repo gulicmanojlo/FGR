@@ -2493,6 +2493,15 @@
     updateCloseVoicingReference(referenceChord);
     activeChordDisplay.value = state.activeChordText;
     updateHighlightedKeys();
+    dispatchPlayChange();
+  }
+
+  function dispatchPlayChange() {
+    const midis = [...state.activeMidiSet];
+    const pcs = [...new Set(midis.map((midi) => pitchFromMidi(midi)))];
+    window.dispatchEvent(new CustomEvent("fgr:playchange", {
+      detail: { midis, pcs }
+    }));
   }
 
   function isPhysicalPianoModeActive() {
