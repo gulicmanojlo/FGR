@@ -157,6 +157,7 @@
     updateToneCard();
     if (prefs.tool === "akordi" || prefs.tool === "chart") renderTool();
     renderMiniChart();
+    if (typeof recRetune === "function") recRetune();
   }
 
   function transposeChordName(name) {
@@ -183,26 +184,42 @@
   /* ---------- "Svira se" ogledalo ---------- */
   var activeChord = $("activeChordDisplay");
   var stage = $("stageChordName");
-  function shortenAppChord(text) {
-    /* "C dur bliski (osnovni) - C4 E4 G4" -> "C dur" / "C mol (I obrtaj)" -> "C mol · I obrtaj" */
-    var main = text.split(" - ")[0].trim();
-    var m = main.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
-    if (!m) return main;
-    var inv = m[2].trim();
-    return inv && inv !== "osnovni" ? m[1].trim() + " · " + inv : m[1].trim();
+  function parseAppChord(text) {
+    /* "C4 dur bliski (normalan) - C4 E4 G4" -> { name: "C dur", notes: "C E G" } */
+    var parts = text.split(" - ");
+    var main = parts[0].replace(/\([^)]*\)/g, "").trim();
+    var words = main.split(/\s+/);
+    var root = (words[0] || "").replace(/\d+/g, "");
+    var quality = "";
+    for (var i = 1; i < words.length; i++) {
+      var w = words[i].toLowerCase();
+      if (w === "dur" || w === "mol") { quality = w; break; }
+      if (w.indexOf("sept") === 0) quality = quality || "7";
+    }
+    var notes = (parts[1] || "").replace(/\d+/g, "").replace(/\s+/g, " ").trim();
+    return { name: (root + " " + quality).trim(), notes: notes };
+  }
+  function setStage(name, notes, idle) {
+    if (stage) {
+      stage.textContent = name;
+      stage.classList.toggle("idle", !!idle);
+    }
+    var notesEl = $("stageChordNotes");
+    if (notesEl) notesEl.textContent = notes ? "(" + notes + ")" : "";
   }
   function syncStage() {
     if (!activeChord || !stage) return;
     var midiName = detectMidiChord();
     if (midiName) {
-      stage.textContent = midiName;
-      stage.classList.remove("idle");
+      var midiNotes = Array.from(midiHeld).sort(function (a, b) { return a - b; })
+        .map(function (m) { return NOTE[m % 12]; }).join(" ");
+      setStage(midiName, midiHeld.size > 1 ? midiNotes : "", false);
       return;
     }
     var text = (activeChord.value || activeChord.textContent || "").trim();
-    var idle = !text || text === "-";
-    stage.textContent = idle ? "—" : shortenAppChord(text);
-    stage.classList.toggle("idle", idle);
+    if (!text || text === "-") { setStage("—", "", true); return; }
+    var parsed = parseAppChord(text);
+    setStage(parsed.name || text, parsed.notes, false);
   }
   if (activeChord && stage && typeof MutationObserver !== "undefined") {
     new MutationObserver(syncStage).observe(activeChord, { childList: true, characterData: true, subtree: true });
@@ -272,17 +289,33 @@
       if (settingsStatus) settingsStatus.textContent = "nije povezana";
     }
   }
+  function midiStatusMsg(text) {
+    var el = $("midiSettingsStatus");
+    if (el) el.textContent = text;
+  }
   function connectMidi(silent) {
     if (!navigator.requestMIDIAccess) {
+      midiStatusMsg("browser nema Web MIDI (koristi Chrome/Edge)");
       if (!silent) alert("Ovaj browser nema Web MIDI (koristi Chrome/Edge). Na iPad-u ne radi.");
       return;
     }
+    if (!silent) midiStatusMsg("tražim uredjaje…");
     navigator.requestMIDIAccess().then(function (access) {
       bindMidi(access);
       access.onstatechange = function () { bindMidi(access); };
-    }).catch(function () {
-      if (!silent) alert("Pristup MIDI uredjajima je odbijen.");
+      if (access.inputs.size === 0) {
+        midiStatusMsg("0 uredjaja — proveri: klavijatura ukljucena? kabl u USB DEVICE port? zatvori druge programe/tabove koji drze MIDI, pa klikni ponovo");
+      }
+    }).catch(function (err) {
+      midiStatusMsg("pristup odbijen (" + err.message + ") — proveri dozvole sajta (katanac pored adrese)");
+      if (!silent) alert("Pristup MIDI uredjajima je odbijen. Klikni katanac pored adrese sajta i dozvoli MIDI.");
     });
+  }
+  /* auto-povezivanje ako je dozvola vec data ranije */
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: "midi", sysex: false }).then(function (st) {
+      if (st.state === "granted") connectMidi(true);
+    }).catch(function () {});
   }
   if ($("midiBadge")) $("midiBadge").addEventListener("click", function () { connectMidi(false); });
   if ($("midiConnectBtn")) $("midiConnectBtn").addEventListener("click", function () { connectMidi(false); });
@@ -300,9 +333,19 @@
     return { pc: pc, ivs: ivs };
   }
   function paintChordName(name, weak) {
+    /* hvat na JEDNOM mestu (oko sredine klavira), ne kroz sve oktave */
     var parsed = parseChordName(name);
     if (!parsed) return;
-    paintScale(parsed.pc, parsed.ivs, (weak ? "prati pesmu: " : "") + name);
+    var base = parsed.pc >= 8 ? 48 + parsed.pc : 60 + parsed.pc;
+    var midis = parsed.ivs.map(function (iv) { return base + iv; });
+    document.querySelectorAll("#keyboard .key.root-hint, #keyboard .key.scale-hint").forEach(function (key) {
+      key.classList.remove("root-hint", "scale-hint");
+    });
+    midis.forEach(function (m, i) {
+      var key = document.querySelector('.key[data-midi="' + m + '"]');
+      if (key) key.classList.add(i === 0 ? "root-hint" : "scale-hint");
+    });
+    if ($("dockScaleName")) $("dockScaleName").textContent = (weak ? "prati pesmu: " : "") + name;
   }
 
   /* ---------- brzina + A-B petlja ---------- */
@@ -488,7 +531,8 @@
           cell.dataset.t = chord.t;
           cell.innerHTML = '<div class="n">' + transposeChordName(chord.n) + '</div><div class="t">' + fmtTime(chord.t) + "</div>";
           cell.addEventListener("click", function () {
-            if (window.FGRBridge) window.FGRBridge.seekTo(chord.t);
+            if (rec.playing) recSeek(chord.t);
+            else if (window.FGRBridge) window.FGRBridge.seekTo(chord.t);
             paintChordName(transposeChordName(chord.n), false);
           });
           cell.addEventListener("contextmenu", function (event) {
@@ -616,7 +660,8 @@
       item.dataset.t = chord.t;
       item.innerHTML = '<span class="n">' + transposeChordName(chord.n) + '</span><span class="t">' + fmtTime(chord.t) + "</span>";
       item.addEventListener("click", function () {
-        if (window.FGRBridge) window.FGRBridge.seekTo(chord.t);
+        if (rec.playing) recSeek(chord.t);
+        else if (window.FGRBridge) window.FGRBridge.seekTo(chord.t);
         paintChordName(transposeChordName(chord.n), false);
       });
       wrap.appendChild(item);
@@ -625,8 +670,9 @@
 
   var lastFollowedChord = null;
   window.setInterval(function () {
-    if (!window.FGRBridge || !currentSong) return;
-    var t = window.FGRBridge.getTime();
+    if (!currentSong) return;
+    var t = rec.playing ? recTime() : (window.FGRBridge ? window.FGRBridge.getTime() : 0);
+    if (rec.playing) updateRecRow();
     if (!t) return;
     var currentName = null;
     ["miniChart", "ccStrip"].forEach(function (id) {
@@ -698,6 +744,7 @@
     }).catch(function () {});
   }
   window.addEventListener("fgr:songchange", refreshPipe);
+  window.addEventListener("fgr:songchange", function () { if (typeof updateRecRow === "function") setTimeout(updateRecRow, 0); });
 
   var capStream = null, capRec = null, capChunks = [], capStart = 0, capTimer = null;
   function stopCapture() {
@@ -864,6 +911,89 @@
   });
 
   if ($("pipeRead")) $("pipeRead").addEventListener("click", function () { selectTool("chart"); });
+
+  /* ---------- nas snimak: player sa transpozicijom (pitch prati transpose) ---------- */
+  var rec = { ctx: null, buffer: null, bufferId: null, source: null, playing: false, offset: 0, startedAt: 0 };
+
+  function recRate() { return Math.pow(2, transpose / 12); }
+  function recTime() {
+    if (!rec.playing) return rec.offset;
+    return rec.offset + (rec.ctx.currentTime - rec.startedAt) * recRate();
+  }
+  function recStop(keepOffset) {
+    if (rec.source) {
+      rec.source.onended = null;
+      try { rec.source.stop(); } catch (e) {}
+      rec.source = null;
+    }
+    if (rec.playing && keepOffset) rec.offset = Math.min(recTime(), rec.buffer ? rec.buffer.duration : 0);
+    if (!keepOffset) rec.offset = 0;
+    rec.playing = false;
+    if ($("recPlayBtn")) $("recPlayBtn").textContent = "▶ Pusti snimak";
+  }
+  function recPlayFrom(offset) {
+    if (!rec.buffer) return;
+    recStop(false);
+    rec.offset = Math.max(0, Math.min(offset, rec.buffer.duration - 0.1));
+    rec.source = rec.ctx.createBufferSource();
+    rec.source.buffer = rec.buffer;
+    rec.source.playbackRate.value = recRate();
+    rec.source.connect(rec.ctx.destination);
+    rec.source.onended = function () { if (rec.playing) recStop(false); updateRecRow(); };
+    rec.source.start(0, rec.offset);
+    rec.startedAt = rec.ctx.currentTime;
+    rec.playing = true;
+    if ($("recPlayBtn")) $("recPlayBtn").textContent = "■ Pauza";
+  }
+  function recLoad() {
+    var id = recId();
+    if (!id) return Promise.resolve(false);
+    if (rec.buffer && rec.bufferId === id) return Promise.resolve(true);
+    return dbGet(id).then(function (item) {
+      if (!item) return false;
+      if (!rec.ctx) rec.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      return item.blob.arrayBuffer().then(function (data) {
+        return rec.ctx.decodeAudioData(data);
+      }).then(function (buffer) {
+        rec.buffer = buffer;
+        rec.bufferId = id;
+        return true;
+      });
+    });
+  }
+  function updateRecRow() {
+    var row = $("recPlayerRow");
+    if (!row) return;
+    var id = recId();
+    if (!id) { row.hidden = true; return; }
+    dbGet(id).then(function (item) { row.hidden = !item; }).catch(function () { row.hidden = true; });
+    if ($("recTime")) $("recTime").textContent = fmtTime(recTime()) + (rec.buffer ? " / " + fmtTime(rec.buffer.duration) : "");
+    if ($("recPitch")) {
+      $("recPitch").textContent = transpose === 0 ? "" :
+        (transpose > 0 ? "+" + transpose : transpose) + " (" + (transpose > 0 ? "brže" : "sporije") + ")";
+    }
+  }
+  if ($("recPlayBtn")) $("recPlayBtn").addEventListener("click", function () {
+    if (rec.playing) { recStop(true); updateRecRow(); return; }
+    recLoad().then(function (ok) {
+      if (!ok) { pipeStatus("Nema snimka za ovu pesmu."); return; }
+      if (rec.ctx.state === "suspended") rec.ctx.resume();
+      recPlayFrom(rec.offset);
+      updateRecRow();
+    });
+  });
+  window.addEventListener("fgr:songchange", function () { recStop(false); rec.buffer = null; rec.bufferId = null; updateRecRow(); });
+  function recRetune() {
+    /* promena transpozicije dok snimak svira: nastavi sa novim pitch-em */
+    if (rec.playing) { var t = recTime(); recPlayFrom(t); }
+    updateRecRow();
+  }
+  function recSeek(t) {
+    recLoad().then(function (ok) {
+      if (!ok) return;
+      if (rec.playing) recPlayFrom(t); else { rec.offset = t; updateRecRow(); }
+    });
+  }
 
   /* ---------- start ---------- */
   applyTheme();

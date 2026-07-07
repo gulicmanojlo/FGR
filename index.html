@@ -18,7 +18,7 @@
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=82">
+    <link rel="stylesheet" href="styles.css?v=83">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="FGR aplikacija">
@@ -219,6 +219,12 @@
                   <button id="abLoopButton" class="text-button mini" type="button" title="Ponavljaj deo pesme u krug">A–B</button>
                   <button id="youtubeOpenExternal" class="text-button mini" type="button">Otvori</button>
                 </div>
+                <div id="recPlayerRow" class="rec-row" hidden>
+                  <span class="rec-lab">Na&#353; snimak</span>
+                  <button id="recPlayBtn" class="text-button mini" type="button">&#9654; Pusti snimak</button>
+                  <span class="rec-time" id="recTime">0:00</span>
+                  <span class="rec-pitch" id="recPitch"></span>
+                </div>
                 <label class="seek-field">
                   <span>Premotaj</span>
                   <input id="youtubeSeekSeconds" class="sheet-input seek-input" type="number" min="1" max="60" step="1" value="10" aria-label="Sekunde premotavanja">
@@ -231,6 +237,7 @@
             <section class="panel now-card" aria-label="Trenutni akord">
               <span class="now-lab">Svira se</span>
               <div id="stageChordName" class="idle">&mdash;</div>
+              <span id="stageChordNotes"></span>
               <output id="activeChordDisplay" class="sr-only" aria-live="polite">-</output>
               <span class="now-hint">klavir · tastatura · MIDI</span>
             </section>
@@ -329,7 +336,7 @@
       </div>
     </main>
 
-    <script src="ui-shell.js?v=82" defer></script>
-    <script src="app.js?v=82" defer></script>
+    <script src="ui-shell.js?v=83" defer></script>
+    <script src="app.js?v=83" defer></script>
   </body>
 </html>
