@@ -1,4 +1,4 @@
-const CACHE_NAME = "pwa-klavir-v87";
+const CACHE_NAME = "pwa-klavir-v88";
 
 const CORE_ASSETS = [
   "./",
