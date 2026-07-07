@@ -77,8 +77,8 @@ const DUGMETARA_KEYBOARD_MAPS = Object.fromEntries(
 
 const RELEASE_GUARD_MS = 140;
 const KEYBOARD_CHORD_SETTLE_MS = 50;
-const LOWEST_MIDI = noteToMidi(7, 1);
-const HIGHEST_MIDI = noteToMidi(11, 7);
+const LOWEST_MIDI = 31; // noteToMidi(7, 1)
+const HIGHEST_MIDI = 107; // noteToMidi(11, 7)
 
 const CHORD_INTERVALS = {
   major: {
