@@ -453,6 +453,26 @@
         player.setPlaybackRate(Number(rate) || 1);
       }
     },
+    playFromStart() {
+      const song = getSelectedSong();
+      if (!song) {
+        return false;
+      }
+      state.youtubeResumeTime = 0;
+      ensureSelectedVideoLoaded({ autoplay: true, keepDesired: false }).then((player) => {
+        if (!player) {
+          return;
+        }
+        if (typeof player.seekTo === "function") {
+          player.seekTo(0, true);
+        }
+        state.youtubeDesiredPlaying = true;
+        if (typeof player.playVideo === "function") {
+          player.playVideo();
+        }
+      });
+      return true;
+    },
     addChordToSelected(name, atSeconds) {
       const song = getSelectedSong();
       const chordName = String(name || "").trim();

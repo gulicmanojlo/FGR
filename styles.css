@@ -2284,3 +2284,38 @@ button.pipe-s.rec { border-color: #e0574f; color: #ffb4ae; }
 .pipe-s .st { margin-left: auto; font-size: 10px; color: var(--muted); font-weight: 700; white-space: nowrap; }
 
 .pipe-s .st.ok { color: #7fd695; }
+
+/* ---- v82 ispravke ---- */
+
+.now-card { overflow: hidden; min-width: 0; }
+
+#stageChordName {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(24px, 2.6vw, 36px);
+  text-align: center;
+}
+
+/* MIDI drzane dirke — jako zlatno (tvoje sviranje), jace od pracenja pesme */
+
+.key.white.midi-held {
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.08), transparent 10%, transparent 90%, rgba(0, 0, 0, 0.08)),
+    linear-gradient(#fbe7ae, var(--active)) !important;
+  border-color: var(--active-deep);
+  box-shadow: 0 0 26px -2px var(--active), inset 0 -8px 12px rgba(90, 60, 5, 0.22);
+}
+
+.key.white.midi-held .key-label { color: #4a2f00; }
+
+.key.black.midi-held {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.22), transparent 22%, transparent 78%, rgba(0, 0, 0, 0.38)),
+    linear-gradient(#c9a24a, var(--active-deep)) !important;
+  border-color: var(--active-deep);
+  box-shadow: 0 0 22px -1px var(--active);
+}
+
+.key.black.midi-held .key-label { color: #fff2d6; }

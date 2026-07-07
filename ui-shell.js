@@ -183,11 +183,25 @@
   /* ---------- "Svira se" ogledalo ---------- */
   var activeChord = $("activeChordDisplay");
   var stage = $("stageChordName");
+  function shortenAppChord(text) {
+    /* "C dur bliski (osnovni) - C4 E4 G4" -> "C dur" / "C mol (I obrtaj)" -> "C mol · I obrtaj" */
+    var main = text.split(" - ")[0].trim();
+    var m = main.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+    if (!m) return main;
+    var inv = m[2].trim();
+    return inv && inv !== "osnovni" ? m[1].trim() + " · " + inv : m[1].trim();
+  }
   function syncStage() {
     if (!activeChord || !stage) return;
+    var midiName = detectMidiChord();
+    if (midiName) {
+      stage.textContent = midiName;
+      stage.classList.remove("idle");
+      return;
+    }
     var text = (activeChord.value || activeChord.textContent || "").trim();
     var idle = !text || text === "-";
-    stage.textContent = idle ? "—" : text;
+    stage.textContent = idle ? "—" : shortenAppChord(text);
     stage.classList.toggle("idle", idle);
   }
   if (activeChord && stage && typeof MutationObserver !== "undefined") {
@@ -198,10 +212,35 @@
   /* ---------- MIDI ---------- */
   var midiHeld = new Set();
   var midiOnChord = null; /* callback za vezbu */
+  var MIDI_TEMPLATES = [["", [0, 4, 7]], ["m", [0, 3, 7]], ["dim", [0, 3, 6]], ["sus4", [0, 5, 7]], ["sus2", [0, 2, 7]],
+    ["7", [0, 4, 7, 10]], ["m7", [0, 3, 7, 10]], ["maj7", [0, 4, 7, 11]], ["m7b5", [0, 3, 6, 10]], ["dim7", [0, 3, 6, 9]], ["6", [0, 4, 7, 9]], ["m6", [0, 3, 7, 9]]];
   function midiPcSet() {
     var set = new Set();
     midiHeld.forEach(function (m) { set.add(((m % 12) + 12) % 12); });
     return set;
+  }
+  function detectMidiChord() {
+    if (!midiHeld || midiHeld.size === 0) return null;
+    var notes = Array.from(midiHeld).sort(function (a, b) { return a - b; });
+    if (notes.length === 1) return NOTE[notes[0] % 12];
+    var pcs = Array.from(midiPcSet());
+    var bassPc = notes[0] % 12;
+    var best = null;
+    for (var r = 0; r < pcs.length; r++) {
+      var rootPc = pcs[r];
+      var rel = pcs.map(function (pc) { return (pc - rootPc + 12) % 12; }).sort(function (a, b) { return a - b; });
+      for (var t = 0; t < MIDI_TEMPLATES.length; t++) {
+        var tpl = MIDI_TEMPLATES[t][1];
+        if (tpl.length !== rel.length) continue;
+        var match = tpl.every(function (iv) { return rel.indexOf(iv) !== -1; });
+        if (match) {
+          var score = tpl.length * 10 + (rootPc === bassPc ? 5 : 0);
+          if (!best || score > best.score) best = { rootPc: rootPc, name: NOTE[rootPc] + MIDI_TEMPLATES[t][0], score: score };
+        }
+      }
+    }
+    if (!best) return pcs.map(function (pc) { return NOTE[pc]; }).join("·");
+    return best.rootPc === bassPc ? best.name : best.name + "/" + NOTE[bassPc];
   }
   function onMidiMessage(event) {
     var st = event.data[0], d1 = event.data[1], d2 = event.data[2];
@@ -212,6 +251,7 @@
     if (!changed) return;
     var key = document.querySelector('.key[data-midi="' + d1 + '"]');
     if (key) key.classList.toggle("midi-held", midiHeld.has(d1));
+    syncStage();
     if (midiOnChord) midiOnChord(midiPcSet());
   }
   function bindMidi(access) {
@@ -221,13 +261,15 @@
       if (!first) first = input;
       count++;
     });
-    var led = $("midiLed"), name = $("midiName");
+    var led = $("midiLed"), name = $("midiName"), settingsStatus = $("midiSettingsStatus");
     if (count && first) {
       if (led) led.classList.remove("off");
       if (name) name.textContent = first.name || "MIDI";
+      if (settingsStatus) settingsStatus.textContent = "✓ povezana: " + (first.name || "MIDI uredjaj");
     } else {
       if (led) led.classList.add("off");
       if (name) name.textContent = "MIDI";
+      if (settingsStatus) settingsStatus.textContent = "nije povezana";
     }
   }
   function connectMidi(silent) {
@@ -243,6 +285,25 @@
     });
   }
   if ($("midiBadge")) $("midiBadge").addEventListener("click", function () { connectMidi(false); });
+  if ($("midiConnectBtn")) $("midiConnectBtn").addEventListener("click", function () { connectMidi(false); });
+
+  /* ---------- naziv akorda -> tonovi (za crtanje hvata) ---------- */
+  var NAME_SUFFIX = { "": [0, 4, 7], "m": [0, 3, 7], "dim": [0, 3, 6], "°": [0, 3, 6], "sus4": [0, 5, 7], "sus2": [0, 2, 7],
+    "7": [0, 4, 7, 10], "m7": [0, 3, 7, 10], "maj7": [0, 4, 7, 11], "m7b5": [0, 3, 6, 10], "dim7": [0, 3, 6, 9], "6": [0, 4, 7, 9], "m6": [0, 3, 7, 9] };
+  function parseChordName(name) {
+    var m = String(name || "").trim().match(/^(Cis|Dis|Fis|Gis|C|D|E|F|G|A|B|H)(.*)$/);
+    if (!m) return null;
+    var pc = NOTE.indexOf(m[1]);
+    var suffix = m[2].split("/")[0].trim();
+    var ivs = NAME_SUFFIX[suffix];
+    if (!ivs) ivs = suffix.indexOf("m") === 0 ? NAME_SUFFIX.m : NAME_SUFFIX[""];
+    return { pc: pc, ivs: ivs };
+  }
+  function paintChordName(name, weak) {
+    var parsed = parseChordName(name);
+    if (!parsed) return;
+    paintScale(parsed.pc, parsed.ivs, (weak ? "prati pesmu: " : "") + name);
+  }
 
   /* ---------- brzina + A-B petlja ---------- */
   var RATES = [1, 0.75, 0.5];
@@ -426,7 +487,10 @@
           cell.className = "cc";
           cell.dataset.t = chord.t;
           cell.innerHTML = '<div class="n">' + transposeChordName(chord.n) + '</div><div class="t">' + fmtTime(chord.t) + "</div>";
-          cell.addEventListener("click", function () { if (window.FGRBridge) window.FGRBridge.seekTo(chord.t); });
+          cell.addEventListener("click", function () {
+            if (window.FGRBridge) window.FGRBridge.seekTo(chord.t);
+            paintChordName(transposeChordName(chord.n), false);
+          });
           cell.addEventListener("contextmenu", function (event) {
             event.preventDefault();
             if (window.FGRBridge && confirm("Obriši " + chord.n + " (" + fmtTime(chord.t) + ")?")) {
@@ -551,15 +615,20 @@
       item.className = "mini-cc";
       item.dataset.t = chord.t;
       item.innerHTML = '<span class="n">' + transposeChordName(chord.n) + '</span><span class="t">' + fmtTime(chord.t) + "</span>";
-      item.addEventListener("click", function () { if (window.FGRBridge) window.FGRBridge.seekTo(chord.t); });
+      item.addEventListener("click", function () {
+        if (window.FGRBridge) window.FGRBridge.seekTo(chord.t);
+        paintChordName(transposeChordName(chord.n), false);
+      });
       wrap.appendChild(item);
     });
   }
 
+  var lastFollowedChord = null;
   window.setInterval(function () {
     if (!window.FGRBridge || !currentSong) return;
     var t = window.FGRBridge.getTime();
     if (!t) return;
+    var currentName = null;
     ["miniChart", "ccStrip"].forEach(function (id) {
       var wrap = $(id);
       if (!wrap) return;
@@ -570,7 +639,16 @@
         cell.classList.toggle("now", cell === current);
         cell.classList.toggle("on", cell === current);
       });
+      if (current) {
+        currentName = (current.querySelector(".n") || current).textContent.trim();
+        if (id === "ccStrip") current.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      }
     });
+    /* pesma "vodi" klavir bledom bojom — osim kad Skale/Vezba drze klavir */
+    if (currentName && currentName !== lastFollowedChord && prefs.tool !== "skale" && prefs.tool !== "vezba") {
+      lastFollowedChord = currentName;
+      paintChordName(currentName, true);
+    }
   }, 600);
 
   /* ---------- Skidanje: snimi jednom + prepoznaj akorde ---------- */
@@ -633,7 +711,12 @@
     if (capRec && capRec.state === "recording") { stopCapture(); return; }
     if (!currentSong) { pipeStatus("Prvo izaberi pesmu u repertoaru."); return; }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { pipeStatus("Deljenje taba ne radi u ovom browseru (Chrome/Edge desktop)."); return; }
-    navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(function (stream) {
+    navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true,
+      preferCurrentTab: true,
+      selfBrowserSurface: "include"
+    }).then(function (stream) {
       if (!stream.getAudioTracks().length) {
         stream.getTracks().forEach(function (t) { t.stop(); });
         pipeStatus("Nema zvuka — pri deljenju čekiraj „Deli audio taba”.");
@@ -662,13 +745,19 @@
       capTimer = setInterval(function () {
         btn.querySelector(".tt").textContent = "■ Zaustavi (" + fmtTime((Date.now() - capStart) / 1000) + ")";
       }, 500);
-      pipeStatus("Snima… pusti pesmu do kraja pa klikni „Zaustavi”.");
+      if (window.FGRBridge && window.FGRBridge.playFromStart) {
+        window.FGRBridge.playFromStart();
+        pipeStatus("Snima… pesma je puštena od početka. Kad se završi, klikni „Zaustavi”.");
+      } else {
+        pipeStatus("Snima… pusti pesmu do kraja pa klikni „Zaustavi”.");
+      }
       stream.getAudioTracks()[0].onended = stopCapture;
     }).catch(function (err) { pipeStatus("Otkazano: " + err.message); });
   });
 
   /* offline analiza: hromagram preko OfflineAudioContext suspend/resume */
-  var AN_TEMPLATES = [["", [0, 4, 7]], ["m", [0, 3, 7]], ["7", [0, 4, 7, 10]], ["m7", [0, 3, 7, 10]], ["maj7", [0, 4, 7, 11]], ["dim", [0, 3, 6]], ["sus4", [0, 5, 7]]];
+  /* samo cesti akordi — bez sus/dim egzotike koja zbunjuje u auto-prepoznavanju */
+  var AN_TEMPLATES = [["", [0, 4, 7]], ["m", [0, 3, 7]], ["7", [0, 4, 7, 10]], ["m7", [0, 3, 7, 10]]];
   var AN_VECS = [];
   AN_TEMPLATES.forEach(function (tpl) {
     for (var r = 0; r < 12; r++) {

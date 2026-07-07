@@ -18,7 +18,7 @@
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=81">
+    <link rel="stylesheet" href="styles.css?v=82">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="FGR aplikacija">
@@ -51,6 +51,15 @@
                 <label><input type="radio" name="uiTheme" value="dark" checked><span>Tamna</span></label>
                 <label><input type="radio" name="uiTheme" value="light"><span>Svetla</span></label>
               </div>
+            </div>
+          </section>
+
+          <section class="toolbar-section" aria-label="MIDI klavijatura">
+            <span class="toolbar-title">MIDI</span>
+            <div class="toolbar-controls">
+              <button id="midiConnectBtn" class="text-button" type="button">&#128268; Povezi klavijaturu</button>
+              <span id="midiSettingsStatus" class="control-label">nije povezana</span>
+              <span class="control-label" style="font-weight:600">USB kabl u &bdquo;USB DEVICE&rdquo; port klavijature &rarr; ra&#269;unar/tablet. &#352;ta god odsvira&#353; vidi se na klaviru dole i u &bdquo;Svira se&rdquo;.</span>
             </div>
           </section>
 
@@ -254,7 +263,7 @@
           <section class="panel strip" aria-label="Skidanje pesme">
             <div class="strip-head"><b>Skidanje pesme</b><span id="pipeStatus" class="pipe-status" aria-live="polite"></span></div>
             <div class="pipe">
-              <button id="pipeRec" class="pipe-s" type="button" title="Pusti pesmu, podeli tab sa zvukom — snimak se pamti uz pesmu"><span class="n">1</span><span class="tt">Snimi jednom</span><span class="st" id="pipeRecSt"></span></button>
+              <button id="pipeRec" class="pipe-s" type="button" title="Klikni, izaberi OVAJ tab i cekiraj Deli audio — pesma krece sama od pocetka i snima se"><span class="n">1</span><span class="tt">Snimi jednom</span><span class="st" id="pipeRecSt"></span></button>
               <button class="pipe-s" type="button" disabled title="Demucs u browseru — u izradi"><span class="n">2</span><span class="tt">Razdvoji kanale</span><span class="st">uskoro</span></button>
               <button id="pipeChords" class="pipe-s" type="button" title="Analizira sacuvani snimak i upisuje akorde u chart"><span class="n">3</span><span class="tt">Prepoznaj akorde</span><span class="st" id="pipeChordsSt"></span></button>
               <button id="pipeRead" class="pipe-s" type="button" title="Otvori chord chart ove pesme"><span class="n">4</span><span class="tt">Citaj iz memorije</span><span class="st" id="pipeReadSt"></span></button>
@@ -262,7 +271,6 @@
             <div class="lab-grid">
               <a class="lab-card" href="chord-lab.html"><span class="ic">&#127925;</span><span class="tx"><span class="tt">Chord Lab</span><span class="dd">prepoznavanje iz zvuka</span></span><span class="badge live">Prototip</span></a>
               <a class="lab-card" href="capture-lab.html"><span class="ic">&#127908;</span><span class="tx"><span class="tt">Capture Lab</span><span class="dd">snimi i zapamti pesmu</span></span><span class="badge live">Prototip</span></a>
-              <a class="lab-card" href="midi-lab.html"><span class="ic">&#127929;</span><span class="tx"><span class="tt">MIDI Lab</span><span class="dd">dijagnostika klavijature</span></span><span class="badge live">Radi</span></a>
               <span class="lab-card static"><span class="ic">&#129516;</span><span class="tx"><span class="tt">Razdvajanje kanala</span><span class="dd">bas·bubnjevi·solo·harmonija</span></span><span class="badge soon">U izradi</span></span>
             </div>
           </section>
@@ -321,7 +329,7 @@
       </div>
     </main>
 
-    <script src="ui-shell.js?v=81" defer></script>
-    <script src="app.js?v=81" defer></script>
+    <script src="ui-shell.js?v=82" defer></script>
+    <script src="app.js?v=82" defer></script>
   </body>
 </html>
