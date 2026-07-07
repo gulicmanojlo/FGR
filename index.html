@@ -18,7 +18,7 @@
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=85">
+    <link rel="stylesheet" href="styles.css?v=86">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="FGR aplikacija">
@@ -262,6 +262,10 @@
                 <button id="octaveDown" class="text-button mini" type="button">Oktava -</button>
                 <output id="octaveDisplay" class="status-pill" aria-live="polite">Oktava: 4</output>
                 <button id="octaveUp" class="text-button mini" type="button">Oktava +</button>
+                <label class="toggle-row octave-lock" title="Kad je iskljuceno, tonovi idu uzlazno od izabrane oktave.">
+                  <input id="octaveLockToggle" type="checkbox" checked>
+                  <span>Fiksna</span>
+                </label>
               </section>
             </div>
             <div class="tool-layout">
@@ -355,7 +359,7 @@
       </div>
     </main>
 
-    <script src="ui-shell.js?v=85" defer></script>
-    <script src="app.js?v=85" defer></script>
+    <script src="ui-shell.js?v=86" defer></script>
+    <script src="app.js?v=86" defer></script>
   </body>
 </html>

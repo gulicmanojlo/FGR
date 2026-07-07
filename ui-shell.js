@@ -50,13 +50,14 @@
 
   /* ---------- prefs ---------- */
   var STORAGE_KEY = "fgr-ui-v1";
-  var prefs = { theme: "dark", tool: "akordi", scaleAllOctaves: false };
+  var prefs = { theme: "dark", tool: "akordi", scaleAllOctaves: false, octaveLocked: true };
   try {
     var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
     if (saved && typeof saved === "object") {
       if (saved.theme === "light" || saved.theme === "dark") prefs.theme = saved.theme;
       if (typeof saved.tool === "string") prefs.tool = saved.tool;
       if (typeof saved.scaleAllOctaves === "boolean") prefs.scaleAllOctaves = saved.scaleAllOctaves;
+      if (typeof saved.octaveLocked === "boolean") prefs.octaveLocked = saved.octaveLocked;
     }
   } catch (e) {}
   function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)); } catch (e) {} }
@@ -86,6 +87,15 @@
       var show = $("settingsPanel").hidden;
       $("settingsPanel").hidden = !show;
       $("settingsToggle").setAttribute("aria-expanded", show ? "true" : "false");
+    });
+  }
+  if ($("octaveLockToggle")) {
+    $("octaveLockToggle").checked = prefs.octaveLocked !== false;
+    $("octaveLockToggle").addEventListener("change", function () {
+      prefs.octaveLocked = $("octaveLockToggle").checked;
+      save();
+      clearScale();
+      renderTool();
     });
   }
   if ($("addSongToggle") && $("addSongForm")) {
@@ -123,8 +133,18 @@
     var octave = bridge && typeof bridge.getBaseOctave === "function" ? Number(bridge.getBaseOctave()) : 4;
     return Number.isFinite(octave) ? Math.max(0, Math.min(8, octave)) : 4;
   }
-  function selectedRootMidi(rootPc) {
-    return (selectedOctave() + 1) * 12 + rootPc;
+  function normalizePc(pc) {
+    return ((Number(pc) % 12) + 12) % 12;
+  }
+  function octaveLocked() {
+    return prefs.octaveLocked !== false;
+  }
+  function selectedRootMidi(rootPc, options) {
+    var root = normalizePc(rootPc);
+    var octaveBase = (selectedOctave() + 1) * 12;
+    if (octaveLocked()) return octaveBase + root;
+    var anchor = options && options.anchorPc !== undefined ? normalizePc(options.anchorPc) : root;
+    return octaveBase + anchor + ((root - anchor + 12) % 12);
   }
   function uniqueSortedIntervals(intervals) {
     return Array.from(new Set(intervals)).sort(function (a, b) { return a - b; });
@@ -160,8 +180,8 @@
     }
     return out;
   }
-  function chordMidisFromIntervals(rootPc, intervals, inversion) {
-    var base = selectedRootMidi(rootPc);
+  function chordMidisFromIntervals(rootPc, intervals, inversion, options) {
+    var base = selectedRootMidi(rootPc, options);
     return applyInversion(intervals, inversion).map(function (iv) { return base + iv; });
   }
   function chordMidis(rootPc, type) {
@@ -196,7 +216,7 @@
     }
   }
   function renderHint(hint) {
-    var base = selectedRootMidi(hint.rootPc);
+    var base = selectedRootMidi(hint.rootPc, { anchorPc: hint.anchorPc });
     var midis = hint.midis ? hint.midis.slice() : hint.intervals.map(function (iv) { return base + iv; });
     var pcs = new Set(midis.map(function (m) { return ((m % 12) + 12) % 12; }));
     document.querySelectorAll("#keyboard .key.root-hint, #keyboard .key.scale-hint").forEach(function (key) {
@@ -222,7 +242,8 @@
       intervals: intervals.slice(),
       label: label || "",
       autoClear: !!(options && options.autoClear),
-      allOctaves: !!(options && options.allOctaves)
+      allOctaves: !!(options && options.allOctaves),
+      anchorPc: options && options.anchorPc !== undefined ? normalizePc(options.anchorPc) : rootPc
     };
     renderHint(activeHint);
     if (activeHint.autoClear) {
@@ -253,7 +274,10 @@
     if ($("dockScaleName")) $("dockScaleName").textContent = "";
   }
   window.addEventListener("fgr:octavechange", function () {
-    if (activeHint && !activeHint.autoClear) renderHint(activeHint);
+    if (["akordi", "skale", "vezba"].indexOf(prefs.tool) !== -1) {
+      clearScale();
+      renderTool();
+    } else if (activeHint && !activeHint.autoClear) renderHint(activeHint);
     else clearScale();
   });
   window.addEventListener("fgr:keyboardready", function () {
@@ -814,12 +838,13 @@
         var pc = (k.pc + d[2]) % 12;
         variantIds.forEach(function (variantId) {
           var intervals = chordIntervals(d[1], variantId);
-          var midis = chordMidisFromIntervals(pc, intervals, inversion);
+          var midis = chordMidisFromIntervals(pc, intervals, inversion, { anchorPc: k.pc });
           var name = chordName(pc, d[1], variantId);
           var actualInversion = Math.min(inversion, Math.max(0, midis.length - 1));
           var card = document.createElement("button");
           card.type = "button";
           card.className = "deg" + (d[3] ? " alt" : "");
+          card.dataset.midis = midis.join(",");
           card.innerHTML = '<span class="r">' + d[0] + (variantId === "triad" ? "" : " · " + CHORD_VARIANTS[variantId].label) + '</span>' +
             '<span class="nm">' + name + "</span>" +
             '<span class="nt">' + noteNamesForIntervals(pc, intervals) + " · " + inversionLabel(actualInversion) + "</span>";
@@ -854,7 +879,7 @@
     function update() {
       var pc = Number(scRoot.value) || 0;
       var ivs = SCALES[scType.value];
-      paintScale(pc, ivs, NOTE[pc] + " " + scType.value, { allOctaves: prefs.scaleAllOctaves });
+      paintScale(pc, ivs, NOTE[pc] + " " + scType.value, { allOctaves: prefs.scaleAllOctaves, anchorPc: pc });
       $("scFormula").innerHTML = ivs.map(function (iv) {
         return '<span class="fstep">' + NOTE[(pc + iv) % 12] + "</span>";
       }).join("");
@@ -870,7 +895,7 @@
     $("scPlay").addEventListener("click", function () {
       var pc = Number(scRoot.value) || 0;
       var ivs = SCALES[scType.value].concat([12]);
-      var base = selectedRootMidi(pc);
+      var base = selectedRootMidi(pc, { anchorPc: pc });
       ivs.forEach(function (iv, i) {
         setTimeout(function () { pressKeys([base + iv], 240); }, i * 280);
       });
@@ -916,7 +941,7 @@
       var variantId = rand(["triad", "7", "9", "sus", "maj7", "dim"]);
       var intervals = chordIntervals(d[1], variantId);
       var inversion = Math.min(rand([0, 1, 2, 3]), Math.max(0, intervals.length - 1));
-      var midis = chordMidisFromIntervals(pc, intervals, inversion);
+      var midis = chordMidisFromIntervals(pc, intervals, inversion, { anchorPc: k.pc });
       var name = chordName(pc, d[1], variantId);
       return {
         kind: "chord",
@@ -956,7 +981,7 @@
         answer: NOTE[rootPc] + " - " + NOTE[(rootPc + interval[1]) % 12],
         pcs: pcsFrom(rootPc, [0, interval[1]]),
         accumulate: true,
-        midis: chordMidisFromIntervals(rootPc, [0, interval[1]], 0)
+        midis: chordMidisFromIntervals(rootPc, [0, interval[1]], 0, { anchorPc: rootPc })
       };
     }
     function makeDegreeTask() {
@@ -969,7 +994,7 @@
         answer: NOTE[pc],
         pcs: [pc],
         accumulate: true,
-        midis: [selectedRootMidi(pc)]
+        midis: [selectedRootMidi(pc, { anchorPc: k.pc })]
       };
     }
     function makeTask() {
@@ -988,7 +1013,7 @@
     }
     function paintTask() {
       if (target.kind === "scale") {
-        paintScale(target.rootPc, target.intervals, target.title, { allOctaves: prefs.scaleAllOctaves });
+        paintScale(target.rootPc, target.intervals, target.title, { allOctaves: prefs.scaleAllOctaves, anchorPc: target.rootPc });
       } else {
         paintMidis(target.midis || target.pcs.map(selectedRootMidi), target.title);
       }
