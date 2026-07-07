@@ -1,10 +1,16 @@
-const CACHE_NAME = "pwa-klavir-v86";
+const CACHE_NAME = "pwa-klavir-v87";
+
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./styles.css?v=86",
-  "./app.js?v=86",
-  "./ui-shell.js?v=86",
+  "./js/state.js",
+  "./js/audio.js",
+  "./js/keyboard.js",
+  "./js/midi.js",
+  "./js/github.js",
+  "./js/ui-tools.js",
+  "./js/ui-controller.js",
   "./manifest.webmanifest",
   "./repertoire.json",
   "./icons/icon.svg",
@@ -14,6 +20,7 @@ const CORE_ASSETS = [
   "./capture-lab.html",
   "./midi-lab.html"
 ];
+
 const SAMPLE_ASSETS = [
   "./samples/piano/A0v12.mp3",
   "./samples/piano/A1v12.mp3",
@@ -49,7 +56,6 @@ const SAMPLE_ASSETS = [
   "./samples/piano/NOTICE.txt",
   "./samples/piano/README.audio-samples-piano-mp3-velocity12.md"
 ];
-const ASSETS = [...CORE_ASSETS, ...SAMPLE_ASSETS];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -83,8 +89,7 @@ self.addEventListener("fetch", (event) => {
     event.request.mode === "navigate" ||
     url.pathname.endsWith("/") ||
     url.pathname.endsWith("/index.html") ||
-    url.pathname.endsWith("/app.js") ||
-    url.pathname.endsWith("/ui-shell.js") ||
+    url.pathname.includes("/js/") ||
     url.pathname.endsWith("/styles.css") ||
     url.pathname.endsWith("/service-worker.js") ||
     url.pathname.endsWith(".html");

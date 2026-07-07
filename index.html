@@ -220,6 +220,30 @@
                   <span class="rec-time" id="recTime">0:00</span>
                   <span class="rec-pitch" id="recPitch"></span>
                 </div>
+                <div id="recMixerPanel" class="rec-mixer-panel" hidden>
+                  <div class="mixer-title">Frekvencijski mikser kanala</div>
+                  
+                  <div class="mixer-channel">
+                    <span class="chan-label">Bas</span>
+                    <input id="mixBassVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Bass volume">
+                    <button id="mixBassMute" class="mixer-btn" type="button" title="Mute">M</button>
+                    <button id="mixBassSolo" class="mixer-btn" type="button" title="Solo">S</button>
+                  </div>
+                  
+                  <div class="mixer-channel">
+                    <span class="chan-label">Melodija</span>
+                    <input id="mixMidVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Melody volume">
+                    <button id="mixMidMute" class="mixer-btn" type="button" title="Mute">M</button>
+                    <button id="mixMidSolo" class="mixer-btn" type="button" title="Solo">S</button>
+                  </div>
+                  
+                  <div class="mixer-channel">
+                    <span class="chan-label">Ritam</span>
+                    <input id="mixHighVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Rhythm volume">
+                    <button id="mixHighMute" class="mixer-btn" type="button" title="Mute">M</button>
+                    <button id="mixHighSolo" class="mixer-btn" type="button" title="Solo">S</button>
+                  </div>
+                </div>
                 <label class="seek-field">
                   <span>Premotaj</span>
                   <input id="youtubeSeekSeconds" class="sheet-input seek-input" type="number" min="1" max="60" step="1" value="10" aria-label="Sekunde premotavanja">
@@ -255,6 +279,7 @@
               <div class="chips" id="toolChips">
                 <button class="chip on" type="button" data-m="akordi">Akordi tonaliteta</button>
                 <button class="chip" type="button" data-m="skale">Skale</button>
+                <button class="chip" type="button" data-m="krug">Krug kvinti</button>
                 <button class="chip" type="button" data-m="vezba">Vezba</button>
                 <button class="chip" type="button" data-m="chart">Chord chart</button>
               </div>
@@ -282,6 +307,13 @@
                   <div class="metro-controls">
                     <label>Takt <select id="mtSig">
                       <option>2/4</option><option selected>4/4</option><option>3/4</option><option>6/8</option><option>7/8</option><option>9/8</option>
+                    </select></label>
+                    <label>Ritam <select id="mtRhythm">
+                      <option value="click">Metronom</option>
+                      <option value="rock">Rock</option>
+                      <option value="funk">Funk</option>
+                      <option value="swing">Swing</option>
+                      <option value="rumba">Rumba</option>
                     </select></label>
                     <button class="text-button mini" id="mtTap" type="button">Tap tempo</button>
                     <button class="text-button mini primary-button" id="mtPlay" type="button">&#9654; Start</button>
