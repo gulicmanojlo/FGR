@@ -436,6 +436,9 @@
     getSelectedSong() {
       return getSelectedSong();
     },
+    getBaseOctave() {
+      return state.baseOctave;
+    },
     getTime() {
       const player = state.youtubePlayer;
       return player && typeof player.getCurrentTime === "function" ? Number(player.getCurrentTime()) || 0 : 0;
@@ -516,6 +519,9 @@
 
   function init() {
     renderKeyboard();
+    window.dispatchEvent(new CustomEvent("fgr:keyboardready", {
+      detail: { octave: state.baseOctave }
+    }));
     loadRepertoireState();
     loadKeyboardSettings();
     renderRepertoire();
@@ -3772,6 +3778,9 @@
     state.baseOctave = next;
     state.closeVoicingReferenceMidis = null;
     updateOctaveControls();
+    window.dispatchEvent(new CustomEvent("fgr:octavechange", {
+      detail: { octave: state.baseOctave }
+    }));
     scrollToBaseOctave(true);
     recomputeSound();
   }

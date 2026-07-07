@@ -95,8 +95,16 @@
   }
   function formatKey(pc, minor) { return NOTE[pc] + (minor ? "-mol" : "-dur"); }
 
+  function selectedOctave() {
+    var bridge = window.FGRBridge;
+    var octave = bridge && typeof bridge.getBaseOctave === "function" ? Number(bridge.getBaseOctave()) : 4;
+    return Number.isFinite(octave) ? Math.max(0, Math.min(8, octave)) : 4;
+  }
+  function selectedRootMidi(rootPc) {
+    return (selectedOctave() + 1) * 12 + rootPc;
+  }
   function chordMidis(rootPc, type) {
-    var base = rootPc >= 8 ? 48 + rootPc : 60 + rootPc;
+    var base = selectedRootMidi(rootPc);
     return TRIAD[type].map(function (iv) { return base + iv; });
   }
   function pressKeys(midis, holdMs, card) {
@@ -115,22 +123,56 @@
   }
 
   /* ---------- crtanje skale na pravom klaviru ---------- */
-  function paintScale(rootPc, intervals, label) {
-    var keys = document.querySelectorAll("#keyboard .key");
-    keys.forEach(function (key) {
-      var pc = ((Number(key.dataset.midi) % 12) + 12) % 12;
-      var rel = (pc - rootPc + 12) % 12;
-      key.classList.toggle("root-hint", rel === 0);
-      key.classList.toggle("scale-hint", rel !== 0 && intervals.indexOf(rel) !== -1);
+  var activeHint = null;
+  var hintClearTimer = null;
+
+  function clearHintTimer() {
+    if (hintClearTimer) {
+      window.clearTimeout(hintClearTimer);
+      hintClearTimer = null;
+    }
+  }
+  function renderHint(hint) {
+    var base = selectedRootMidi(hint.rootPc);
+    var rootMidi = base;
+    var midis = hint.intervals.map(function (iv) { return base + iv; });
+    document.querySelectorAll("#keyboard .key.root-hint, #keyboard .key.scale-hint").forEach(function (key) {
+      key.classList.remove("root-hint", "scale-hint");
     });
-    if ($("dockScaleName")) $("dockScaleName").textContent = label || "";
+    midis.forEach(function (m) {
+      var key = document.querySelector('.key[data-midi="' + m + '"]');
+      if (key) key.classList.add(m === rootMidi ? "root-hint" : "scale-hint");
+    });
+    if ($("dockScaleName")) $("dockScaleName").textContent = hint.label || "";
+  }
+  function paintScale(rootPc, intervals, label, options) {
+    clearHintTimer();
+    activeHint = {
+      rootPc: rootPc,
+      intervals: intervals.slice(),
+      label: label || "",
+      autoClear: !!(options && options.autoClear)
+    };
+    renderHint(activeHint);
+    if (activeHint.autoClear) {
+      hintClearTimer = window.setTimeout(clearScale, options && options.holdMs ? options.holdMs : 900);
+    }
   }
   function clearScale() {
+    clearHintTimer();
+    activeHint = null;
     document.querySelectorAll("#keyboard .key.root-hint, #keyboard .key.scale-hint").forEach(function (key) {
       key.classList.remove("root-hint", "scale-hint");
     });
     if ($("dockScaleName")) $("dockScaleName").textContent = "";
   }
+  window.addEventListener("fgr:octavechange", function () {
+    if (activeHint && !activeHint.autoClear) renderHint(activeHint);
+    else clearScale();
+  });
+  window.addEventListener("fgr:keyboardready", function () {
+    if (activeHint) renderHint(activeHint);
+  });
 
   /* ---------- stanje pesme + transpozicija ---------- */
   var currentSong = null;
@@ -155,7 +197,7 @@
   if ($("transDown")) $("transDown").addEventListener("click", function () { transpose = Math.max(-11, transpose - 1); afterTranspose(); });
   function afterTranspose() {
     updateToneCard();
-    if (prefs.tool === "akordi" || prefs.tool === "chart") renderTool();
+    if (["akordi", "chart", "skale", "vezba"].indexOf(prefs.tool) !== -1) renderTool();
     renderMiniChart();
     if (typeof recRetune === "function") recRetune();
   }
@@ -333,19 +375,12 @@
     return { pc: pc, ivs: ivs };
   }
   function paintChordName(name, weak) {
-    /* hvat na JEDNOM mestu (oko sredine klavira), ne kroz sve oktave */
     var parsed = parseChordName(name);
     if (!parsed) return;
-    var base = parsed.pc >= 8 ? 48 + parsed.pc : 60 + parsed.pc;
-    var midis = parsed.ivs.map(function (iv) { return base + iv; });
-    document.querySelectorAll("#keyboard .key.root-hint, #keyboard .key.scale-hint").forEach(function (key) {
-      key.classList.remove("root-hint", "scale-hint");
+    paintScale(parsed.pc, parsed.ivs, (weak ? "prati pesmu: " : "") + name, {
+      autoClear: true,
+      holdMs: weak ? 900 : 1200
     });
-    midis.forEach(function (m, i) {
-      var key = document.querySelector('.key[data-midi="' + m + '"]');
-      if (key) key.classList.add(i === 0 ? "root-hint" : "scale-hint");
-    });
-    if ($("dockScaleName")) $("dockScaleName").textContent = (weak ? "prati pesmu: " : "") + name;
   }
 
   /* ---------- brzina + A-B petlja ---------- */
@@ -408,6 +443,102 @@
     };
   }
 
+  function initMetronome() {
+    if (!$("mtPlay")) return;
+    var beatsBySig = { "2/4": 2, "3/4": 3, "4/4": 4, "6/8": 6, "7/8": 7, "9/8": 9 };
+    var metro = {
+      bpm: 96,
+      sig: $("mtSig") ? $("mtSig").value : "4/4",
+      beatIndex: -1,
+      timer: null,
+      audio: null,
+      taps: []
+    };
+
+    function drawBeats() {
+      var wrap = $("mtBeats");
+      if (!wrap) return;
+      var n = beatsBySig[metro.sig] || 4;
+      wrap.innerHTML = "";
+      for (var i = 0; i < n; i++) {
+        var dot = document.createElement("span");
+        dot.className = "beat" + (i === 0 ? " strong" : "") + (i === metro.beatIndex ? " hit" : "");
+        wrap.appendChild(dot);
+      }
+    }
+    function updateBpm() {
+      if ($("mtVal")) $("mtVal").textContent = metro.bpm;
+    }
+    function click(accent) {
+      if (!metro.audio) metro.audio = new (window.AudioContext || window.webkitAudioContext)();
+      if (metro.audio.state === "suspended") metro.audio.resume();
+      var osc = metro.audio.createOscillator(), gain = metro.audio.createGain();
+      osc.frequency.value = accent ? 1250 : 780;
+      gain.gain.setValueAtTime(accent ? 0.5 : 0.3, metro.audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, metro.audio.currentTime + 0.07);
+      osc.connect(gain); gain.connect(metro.audio.destination);
+      osc.start(); osc.stop(metro.audio.currentTime + 0.08);
+    }
+    function tick() {
+      metro.beatIndex = (metro.beatIndex + 1) % (beatsBySig[metro.sig] || 4);
+      click(metro.beatIndex === 0);
+      drawBeats();
+    }
+    function stop() {
+      if (metro.timer) {
+        window.clearInterval(metro.timer);
+        metro.timer = null;
+      }
+      metro.beatIndex = -1;
+      drawBeats();
+      if ($("mtPlay")) $("mtPlay").innerHTML = "&#9654; Start";
+    }
+    function start() {
+      if (metro.timer) return;
+      if ($("mtPlay")) $("mtPlay").innerHTML = "&#9632; Stop";
+      metro.beatIndex = -1;
+      tick();
+      metro.timer = window.setInterval(tick, 60000 / metro.bpm);
+    }
+    function restart() {
+      var wasRunning = !!metro.timer;
+      stop();
+      if (wasRunning) start();
+    }
+
+    if ($("mtUp")) $("mtUp").addEventListener("click", function () {
+      metro.bpm = Math.min(240, metro.bpm + 1);
+      updateBpm();
+      restart();
+    });
+    if ($("mtDown")) $("mtDown").addEventListener("click", function () {
+      metro.bpm = Math.max(30, metro.bpm - 1);
+      updateBpm();
+      restart();
+    });
+    if ($("mtSig")) $("mtSig").addEventListener("change", function (event) {
+      metro.sig = event.target.value;
+      restart();
+    });
+    if ($("mtTap")) $("mtTap").addEventListener("click", function () {
+      var now = performance.now();
+      metro.taps.push(now);
+      metro.taps = metro.taps.filter(function (t) { return now - t < 3200; });
+      if (metro.taps.length > 1) {
+        var avg = (metro.taps[metro.taps.length - 1] - metro.taps[0]) / (metro.taps.length - 1);
+        metro.bpm = Math.max(30, Math.min(240, Math.round(60000 / avg)));
+        updateBpm();
+        restart();
+      }
+    });
+    $("mtPlay").addEventListener("click", function () {
+      if (metro.timer) stop();
+      else start();
+    });
+    updateBpm();
+    drawBeats();
+  }
+
   var TOOLS = {
     akordi: function () {
       toolBody.innerHTML = '<div class="scale-head">' + keyPickerHTML("ak") +
@@ -429,7 +560,7 @@
             '<span class="nt">' + TRIAD[d[1]].map(function (iv) { return NOTE[(pc + iv) % 12]; }).join(" ") + "</span>";
           card.addEventListener("click", function () {
             pressKeys(chordMidis(pc, d[1]), 650, card);
-            paintScale(pc, TRIAD[d[1]], name + " (akord)");
+            paintScale(pc, TRIAD[d[1]], name + " (akord)", { autoClear: true, holdMs: 800 });
           });
           row.appendChild(card);
         });
@@ -464,7 +595,7 @@
       $("scPlay").addEventListener("click", function () {
         var pc = Number(scRoot.value) || 0;
         var ivs = SCALES[scType.value].concat([12]);
-        var base = pc >= 8 ? 48 + pc : 60 + pc;
+        var base = selectedRootMidi(pc);
         ivs.forEach(function (iv, i) {
           setTimeout(function () { pressKeys([base + iv], 240); }, i * 280);
         });
@@ -551,78 +682,22 @@
         var name = prompt("Akord na " + fmtTime(t) + ":", "");
         if (name && window.FGRBridge.addChordToSelected(name, t)) TOOLS.chart();
       });
-    },
-
-    metronom: function () {
-      toolBody.innerHTML = '<div class="metro">' +
-        '<div class="metro-bpm"><button id="mtDown" type="button">−</button>' +
-        '<div class="metro-num"><span class="mv" id="mtVal">96</span><span class="metro-lab">BPM</span></div>' +
-        '<button id="mtUp" type="button">+</button></div>' +
-        '<div class="metro-beats" id="mtBeats"></div>' +
-        '<div class="scale-head" style="margin:0"><label>Takt <select id="mtSig">' +
-        '<option>2/4</option><option selected>4/4</option><option>3/4</option><option>6/8</option><option>7/8</option><option>9/8</option></select></label>' +
-        '<button class="text-button mini" id="mtTap" type="button">Tap tempo</button>' +
-        '<button class="text-button mini primary-button" id="mtPlay" type="button" style="margin-left:auto">▶ Start</button></div>' +
-        '<p class="tool-note">Naglasen prvi tak. <b>Tap tempo</b>: klikni par puta u ritmu pesme.</p></div>';
-      var beatsBySig = { "2/4": 2, "3/4": 3, "4/4": 4, "6/8": 6, "7/8": 7, "9/8": 9 };
-      var bpm = 96, sig = "4/4", beatIndex = -1, timer = null, audio = null, taps = [];
-      function drawBeats() {
-        var n = beatsBySig[sig], wrap = $("mtBeats");
-        wrap.innerHTML = "";
-        for (var i = 0; i < n; i++) {
-          var dot = document.createElement("span");
-          dot.className = "beat" + (i === 0 ? " strong" : "") + (i === beatIndex ? " hit" : "");
-          wrap.appendChild(dot);
-        }
-      }
-      function click(accent) {
-        if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
-        var osc = audio.createOscillator(), gain = audio.createGain();
-        osc.frequency.value = accent ? 1250 : 780;
-        gain.gain.setValueAtTime(accent ? 0.5 : 0.3, audio.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.07);
-        osc.connect(gain); gain.connect(audio.destination);
-        osc.start(); osc.stop(audio.currentTime + 0.08);
-      }
-      function stop() {
-        if (timer) { window.clearInterval(timer); timer = null; }
-        beatIndex = -1; drawBeats();
-        $("mtPlay").textContent = "▶ Start";
-      }
-      $("mtUp").addEventListener("click", function () { bpm = Math.min(240, bpm + 1); $("mtVal").textContent = bpm; if (timer) restart(); });
-      $("mtDown").addEventListener("click", function () { bpm = Math.max(30, bpm - 1); $("mtVal").textContent = bpm; if (timer) restart(); });
-      $("mtSig").addEventListener("change", function (e) { sig = e.target.value; beatIndex = -1; drawBeats(); if (timer) restart(); });
-      $("mtTap").addEventListener("click", function () {
-        var now = performance.now();
-        taps.push(now);
-        taps = taps.filter(function (t) { return now - t < 3200; });
-        if (taps.length > 1) {
-          var avg = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
-          bpm = Math.max(30, Math.min(240, Math.round(60000 / avg)));
-          $("mtVal").textContent = bpm;
-          if (timer) restart();
-        }
-      });
-      function start() {
-        $("mtPlay").textContent = "■ Stop";
-        beatIndex = -1;
-        timer = window.setInterval(function () {
-          beatIndex = (beatIndex + 1) % beatsBySig[sig];
-          click(beatIndex === 0);
-          drawBeats();
-        }, 60000 / bpm);
-      }
-      function restart() { window.clearInterval(timer); start(); }
-      $("mtPlay").addEventListener("click", function () { if (timer) stop(); else start(); });
-      drawBeats();
     }
   };
 
   function renderTool() {
     if (!toolBody) return;
+    if (!TOOLS[prefs.tool]) {
+      prefs.tool = "akordi";
+      save();
+    }
+    if (chipsWrap) {
+      Array.prototype.forEach.call(chipsWrap.children, function (chip) {
+        chip.classList.toggle("on", chip.dataset.m === prefs.tool);
+      });
+    }
     if (prefs.tool !== "vezba") midiOnChord = null;
-    if (TOOLS[prefs.tool]) TOOLS[prefs.tool]();
-    else { prefs.tool = "akordi"; TOOLS.akordi(); }
+    TOOLS[prefs.tool]();
   }
   function selectTool(name) {
     if (!TOOLS[name]) name = "akordi";
@@ -1000,6 +1075,7 @@
   updateToneCard();
   renderMiniChart();
   refreshPipe();
+  initMetronome();
   if (chipsWrap) {
     Array.prototype.forEach.call(chipsWrap.children, function (chip) {
       chip.classList.toggle("on", chip.dataset.m === prefs.tool);

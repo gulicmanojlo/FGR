@@ -18,7 +18,7 @@
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=83">
+    <link rel="stylesheet" href="styles.css?v=84">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="FGR aplikacija">
@@ -97,11 +97,6 @@
           <section class="toolbar-section play-section" aria-label="Sviranje">
             <span class="toolbar-title">Sviranje</span>
             <div class="toolbar-controls">
-              <section class="control-group octave-control" aria-label="Izbor oktave">
-                <button id="octaveDown" class="text-button" type="button">Oktava -</button>
-                <output id="octaveDisplay" class="status-pill" aria-live="polite">Oktava: 4</output>
-                <button id="octaveUp" class="text-button" type="button">Oktava +</button>
-              </section>
               <section class="control-group desktop-click-control" aria-label="Desktop klik mod">
                 <span class="control-label">Klik</span>
                 <div class="segmented compact" role="radiogroup" aria-label="Desktop klik mod">
@@ -256,14 +251,40 @@
 
           <!-- ALATI -->
           <section class="panel tool" aria-label="Alati">
-            <div class="chips" id="toolChips">
-              <button class="chip on" type="button" data-m="akordi">Akordi tonaliteta</button>
-              <button class="chip" type="button" data-m="skale">Skale</button>
-              <button class="chip" type="button" data-m="vezba">Vezba</button>
-              <button class="chip" type="button" data-m="chart">Chord chart</button>
-              <button class="chip" type="button" data-m="metronom">Metronom</button>
+            <div class="tool-head">
+              <div class="chips" id="toolChips">
+                <button class="chip on" type="button" data-m="akordi">Akordi tonaliteta</button>
+                <button class="chip" type="button" data-m="skale">Skale</button>
+                <button class="chip" type="button" data-m="vezba">Vezba</button>
+                <button class="chip" type="button" data-m="chart">Chord chart</button>
+              </div>
+              <section class="control-group octave-control tool-octave" aria-label="Izbor oktave">
+                <button id="octaveDown" class="text-button mini" type="button">Oktava -</button>
+                <output id="octaveDisplay" class="status-pill" aria-live="polite">Oktava: 4</output>
+                <button id="octaveUp" class="text-button mini" type="button">Oktava +</button>
+              </section>
             </div>
-            <div class="tool-body" id="toolBody"></div>
+            <div class="tool-layout">
+              <div class="tool-body" id="toolBody"></div>
+              <aside class="metronome-panel" aria-label="Metronom">
+                <div class="metro-title">Metronom</div>
+                <div class="metro">
+                  <div class="metro-bpm">
+                    <button id="mtDown" type="button" aria-label="Smanji BPM">&minus;</button>
+                    <div class="metro-num"><span class="mv" id="mtVal">96</span><span class="metro-lab">BPM</span></div>
+                    <button id="mtUp" type="button" aria-label="Povecaj BPM">+</button>
+                  </div>
+                  <div class="metro-beats" id="mtBeats"></div>
+                  <div class="metro-controls">
+                    <label>Takt <select id="mtSig">
+                      <option>2/4</option><option selected>4/4</option><option>3/4</option><option>6/8</option><option>7/8</option><option>9/8</option>
+                    </select></label>
+                    <button class="text-button mini" id="mtTap" type="button">Tap tempo</button>
+                    <button class="text-button mini primary-button" id="mtPlay" type="button">&#9654; Start</button>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </section>
 
           <!-- SKIDANJE PESME -->
@@ -300,8 +321,6 @@
       <!-- ================= KLAVIR (uvek dole) ================= -->
       <section class="dock" aria-label="Klavir">
         <div class="dock-info">
-          <span class="sw root"></span> osnovni ton
-          <span class="sw scale"></span> ton skale
           <span id="dockScaleName"></span>
         </div>
 
@@ -336,7 +355,7 @@
       </div>
     </main>
 
-    <script src="ui-shell.js?v=83" defer></script>
-    <script src="app.js?v=83" defer></script>
+    <script src="ui-shell.js?v=84" defer></script>
+    <script src="app.js?v=84" defer></script>
   </body>
 </html>
