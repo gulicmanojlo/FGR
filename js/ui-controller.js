@@ -1946,6 +1946,20 @@ function toggleTheme() {
 
 function applySavedTheme() {
   const root = document.documentElement;
+  const saved = readJsonStorage("fgr-ui-v1", {});
+  if (saved.theme === "light" || saved.theme === "dark") {
+    state.theme = saved.theme;
+  }
+  if (saved.tool) {
+    state.tool = saved.tool;
+  }
+  if (typeof saved.scaleAllOctaves === "boolean") {
+    state.scaleAllOctaves = saved.scaleAllOctaves;
+  }
+  if (typeof saved.octaveLocked === "boolean") {
+    state.octaveLocked = saved.octaveLocked;
+  }
+
   root.setAttribute("data-theme", state.theme);
   
   const icon = $("themeToggleIcon");
@@ -2374,26 +2388,6 @@ window.FGRBridge = {
     return true;
   }
 };
-
-// Okidac za ucitavanje teme (sprecava flicker)
-function applySavedTheme() {
-  const root = document.documentElement;
-  const saved = readJsonStorage("fgr-ui-v1", {});
-  if (saved.theme === "light" || saved.theme === "dark") {
-    state.theme = saved.theme;
-  }
-  if (saved.tool) {
-    state.tool = saved.tool;
-  }
-  if (typeof saved.scaleAllOctaves === "boolean") {
-    state.scaleAllOctaves = saved.scaleAllOctaves;
-  }
-  if (typeof saved.octaveLocked === "boolean") {
-    state.octaveLocked = saved.octaveLocked;
-  }
-  
-  root.setAttribute("data-theme", state.theme);
-}
 
 // Pokretanje
 init();
