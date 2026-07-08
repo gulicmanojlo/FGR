@@ -10,6 +10,25 @@
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <script>
       (function () {
+        window.addEventListener('error', function(e) {
+          var div = document.createElement('div');
+          div.style.position = 'fixed'; div.style.top = '0'; div.style.left = '0';
+          div.style.width = '100%'; div.style.background = 'red'; div.style.color = 'white';
+          div.style.padding = '10px'; div.style.zIndex = '99999'; div.style.fontFamily = 'monospace';
+          div.style.fontSize = '14px'; div.style.wordBreak = 'break-all';
+          div.innerText = 'Runtime Error: ' + e.message + ' at ' + e.filename + ':' + e.lineno + ':' + e.colno;
+          document.body ? document.body.appendChild(div) : window.addEventListener('DOMContentLoaded', function() { document.body.appendChild(div); });
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+          var div = document.createElement('div');
+          div.style.position = 'fixed'; div.style.top = '0'; div.style.left = '0';
+          div.style.width = '100%'; div.style.background = 'orange'; div.style.color = 'white';
+          div.style.padding = '10px'; div.style.zIndex = '99999'; div.style.fontFamily = 'monospace';
+          div.style.fontSize = '14px'; div.style.wordBreak = 'break-all';
+          div.innerText = 'Unhandled Rejection: ' + (e.reason ? (e.reason.message || e.reason.stack || e.reason) : 'Unknown reason');
+          document.body ? document.body.appendChild(div) : window.addEventListener('DOMContentLoaded', function() { document.body.appendChild(div); });
+        });
+
         var theme = "dark";
         try {
           var saved = JSON.parse(localStorage.getItem("fgr-ui-v1") || "{}").theme;
