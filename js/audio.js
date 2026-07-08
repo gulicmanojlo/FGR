@@ -751,7 +751,7 @@ export function createPitchShifter(context, pitchOffset) {
   }
 
   const pitchRatio = Math.pow(2, pitchOffset / 12);
-  const delayTime = 0.080; // 80ms delay time
+  const delayTime = 0.100; // 100ms delay time for smoother instrumental pitch shifting
   
   const delay1 = context.createDelay(1.0);
   const delay2 = context.createDelay(1.0);
@@ -784,9 +784,9 @@ export function createPitchShifter(context, pitchOffset) {
     ramp1[i] = x;
     ramp2[i] = (x + 0.5) % 1.0;
     
-    // Half-sine windowing
-    win1[i] = Math.sin(x * Math.PI);
-    win2[i] = Math.sin(((x + 0.5) % 1.0) * Math.PI);
+    // Smooth Hanning windowing to reduce vocoder-like artifacts
+    win1[i] = 0.5 * (1 - Math.cos(2 * Math.PI * x));
+    win2[i] = 0.5 * (1 - Math.cos(2 * Math.PI * ((x + 0.5) % 1.0)));
   }
 
   const modSource = context.createBufferSource();
@@ -795,7 +795,7 @@ export function createPitchShifter(context, pitchOffset) {
 
   const delayRate = 1 - pitchRatio;
   const freq = Math.abs(delayRate) / delayTime;
-  modSource.playbackRate.value = freq * bufferLen; // scale LFO speed
+  modSource.playbackRate.value = freq * bufferLen;
 
   const splitter = context.createChannelSplitter(4);
   modSource.connect(splitter);
@@ -937,41 +937,68 @@ export function recPlayFrom(offset) {
   
   rec.pitchShifter = createPitchShifter(rec.ctx, shiftSemitones);
   
-  // Kreiranje filterskih skretnica za simulaciju stem-razdvajanja
-  const bassFilter = rec.ctx.createBiquadFilter();
-  bassFilter.type = "lowpass";
-  bassFilter.frequency.value = 250;
+  // Kreiranje filterskih skretnica za simulaciju stem-razdvajanja (strmi 24dB i 36dB/oktavi rezovi)
+  const bassFilter1 = rec.ctx.createBiquadFilter();
+  bassFilter1.type = "lowpass";
+  bassFilter1.frequency.value = 220;
+  const bassFilter2 = rec.ctx.createBiquadFilter();
+  bassFilter2.type = "lowpass";
+  bassFilter2.frequency.value = 220;
+  const bassFilter3 = rec.ctx.createBiquadFilter();
+  bassFilter3.type = "lowpass";
+  bassFilter3.frequency.value = 220;
 
-  const midHPFilter = rec.ctx.createBiquadFilter();
-  midHPFilter.type = "highpass";
-  midHPFilter.frequency.value = 250;
+  const midHP1 = rec.ctx.createBiquadFilter();
+  midHP1.type = "highpass";
+  midHP1.frequency.value = 220;
+  const midHP2 = rec.ctx.createBiquadFilter();
+  midHP2.type = "highpass";
+  midHP2.frequency.value = 220;
 
-  const midLPFilter = rec.ctx.createBiquadFilter();
-  midLPFilter.type = "lowpass";
-  midLPFilter.frequency.value = 4000;
+  const midLP1 = rec.ctx.createBiquadFilter();
+  midLP1.type = "lowpass";
+  midLP1.frequency.value = 3300;
+  const midLP2 = rec.ctx.createBiquadFilter();
+  midLP2.type = "lowpass";
+  midLP2.frequency.value = 3300;
 
-  const highFilter = rec.ctx.createBiquadFilter();
-  highFilter.type = "highpass";
-  highFilter.frequency.value = 4000;
+  const highFilter1 = rec.ctx.createBiquadFilter();
+  highFilter1.type = "highpass";
+  highFilter1.frequency.value = 3300;
+  const highFilter2 = rec.ctx.createBiquadFilter();
+  highFilter2.type = "highpass";
+  highFilter2.frequency.value = 3300;
+  const highFilter3 = rec.ctx.createBiquadFilter();
+  highFilter3.type = "highpass";
+  highFilter3.frequency.value = 3300;
 
   // Kreiranje gain cvorova
   rec.gains.bass = rec.ctx.createGain();
   rec.gains.mid = rec.ctx.createGain();
   rec.gains.high = rec.ctx.createGain();
 
-  // Povezivanje Pitch Shiftera sa filterima
+  // Povezivanje Pitch Shiftera sa pocetnim filterima grana
   rec.source.connect(rec.pitchShifter.input);
-  rec.pitchShifter.output.connect(bassFilter);
-  rec.pitchShifter.output.connect(midHPFilter);
-  rec.pitchShifter.output.connect(highFilter);
+  rec.pitchShifter.output.connect(bassFilter1);
+  rec.pitchShifter.output.connect(midHP1);
+  rec.pitchShifter.output.connect(highFilter1);
 
-  // Povezivanje frekvencijskih grana sa gainovima
-  bassFilter.connect(rec.gains.bass);
+  // Kaskadno povezivanje frekvencijskih grana sa gainovima
+  // Bas grana (3-struki lowpass)
+  bassFilter1.connect(bassFilter2);
+  bassFilter2.connect(bassFilter3);
+  bassFilter3.connect(rec.gains.bass);
   
-  midHPFilter.connect(midLPFilter);
-  midLPFilter.connect(rec.gains.mid);
+  // Srednja/vokal grana (2-struki highpass pa 2-struki lowpass)
+  midHP1.connect(midHP2);
+  midHP2.connect(midLP1);
+  midLP1.connect(midLP2);
+  midLP2.connect(rec.gains.mid);
   
-  highFilter.connect(rec.gains.high);
+  // Visoka/ritam grana (3-struki highpass)
+  highFilter1.connect(highFilter2);
+  highFilter2.connect(highFilter3);
+  highFilter3.connect(rec.gains.high);
 
   // Povezivanje sa master izlazom
   const dest = state.masterGain || rec.ctx.destination;

@@ -485,14 +485,25 @@ export function initMetronome() {
   });
 
   const mtSig = document.getElementById("mtSig");
+  const mtRhythm = document.getElementById("mtRhythm");
+
   if (mtSig) mtSig.addEventListener("change", (event) => {
     metro.sig = event.target.value;
+    // Ako se izabere bilo koji takt osim 4/4, drum machine ritmovi se vracaju na obican metronom klik
+    if (metro.sig !== "4/4" && mtRhythm) {
+      mtRhythm.value = "click";
+      metro.rhythm = "click";
+    }
     restart();
   });
 
-  const mtRhythm = document.getElementById("mtRhythm");
   if (mtRhythm) mtRhythm.addEventListener("change", (event) => {
     metro.rhythm = event.target.value;
+    // Ako se izabere drum machine ritam, automatski prebaci takt na 4/4
+    if (metro.rhythm !== "click" && mtSig) {
+      mtSig.value = "4/4";
+      metro.sig = "4/4";
+    }
     restart();
   });
 
@@ -915,17 +926,24 @@ export function selectTool(name) {
 }
 
 // ---------------- KRUG KVINTI CRTANJE ----------------
+// Globalna funkcija za reprodukciju akorada iz kruga kvinti
+window.playCircleChord = function(pc, quality) {
+  const intervals = quality === "minor" ? [0, 3, 7] : [0, 4, 7];
+  const baseMidi = 12 * 3 + pc; // Oktava niže za puniji zvuk akorda (C3..)
+  const midis = intervals.map(iv => baseMidi + iv);
+  const label = NOTE_NAMES[pc] + (quality === "minor" ? "m" : "");
+  
+  pressKeys(midis, 800);
+  paintMidis(midis, label, { autoClear: true, holdMs: 1000 });
+};
+
 function renderCircleOfFifths() {
   const container = document.getElementById("circleContainer");
   if (!container) return;
   
-  // Nacrtajmo SVG krug kvinti
   const currentKey = shownKey(); // pc i minor
-  
-  // Raspored tonova po kvintnom krugu (C G D A E H Fis/Gis ... itd)
   const circleMajor = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
   
-  // Indeks glavnog dur tonaliteta u kvintnom krugu (oko kojeg se gradi klaster od 6 srodnih akorada)
   const idx = circleMajor.indexOf(currentKey.minor ? (currentKey.pc + 3) % 12 : currentKey.pc);
   const relatedIndices = [
     idx,
@@ -938,19 +956,16 @@ function renderCircleOfFifths() {
     <circle cx="150" cy="150" r="110" fill="none" stroke="var(--line)" stroke-width="1" />
     <circle cx="150" cy="150" r="78" fill="none" stroke="var(--line)" stroke-width="1" />`;
     
-  // Generisemo krugove
   for (let i = 0; i < 12; i++) {
     const angle = (i * 30 - 90) * Math.PI / 180;
     const xMajor = 150 + 126 * Math.cos(angle);
     const yMajor = 150 + 126 * Math.sin(angle);
     const pcMajor = circleMajor[i];
     
-    // Relative minor je 3 polustepena nize (ili 9 polustepena vise)
     const pcMinor = (pcMajor + 9) % 12;
     const xMinor = 150 + 94 * Math.cos(angle);
     const yMinor = 150 + 94 * Math.sin(angle);
     
-    // Provera da li je ovaj tonalitet aktivan
     const isMajorActive = !currentKey.minor && currentKey.pc === pcMajor;
     const isMinorActive = currentKey.minor && currentKey.pc === pcMinor;
     
@@ -983,13 +998,17 @@ function renderCircleOfFifths() {
       textMinorColor = "var(--accent-strong)";
     }
     
-    // Spoljasnji (dur) segmenti
-    html += `<circle cx="${xMajor}" cy="${yMajor}" r="14" fill="${fillMajor}" stroke="${strokeMajor}" stroke-width="1.5" />
-      <text x="${xMajor}" y="${yMajor + 4}" font-size="11" font-weight="800" text-anchor="middle" fill="${textMajorColor}">${NOTE_NAMES[pcMajor]}</text>`;
+    // Spoljasnji (dur) segmenti (klikabilna grupa)
+    html += `<g class="circle-chord-btn" onclick="window.playCircleChord(${pcMajor}, 'major')">
+      <circle cx="${xMajor}" cy="${yMajor}" r="14" fill="${fillMajor}" stroke="${strokeMajor}" stroke-width="1.5" />
+      <text x="${xMajor}" y="${yMajor + 4}" font-size="11" font-weight="800" text-anchor="middle" fill="${textMajorColor}">${NOTE_NAMES[pcMajor]}</text>
+    </g>`;
       
-    // Unutrasnji (mol) segmenti
-    html += `<circle cx="${xMinor}" cy="${yMinor}" r="12" fill="${fillMinor}" stroke="${strokeMinor}" stroke-width="1.5" />
-      <text x="${xMinor}" y="${yMinor + 4}" font-size="9" font-weight="700" text-anchor="middle" fill="${textMinorColor}">${NOTE_NAMES[pcMinor].toLowerCase()}m</text>`;
+    // Unutrasnji (mol) segmenti (klikabilna grupa)
+    html += `<g class="circle-chord-btn" onclick="window.playCircleChord(${pcMinor}, 'minor')">
+      <circle cx="${xMinor}" cy="${yMinor}" r="12" fill="${fillMinor}" stroke="${strokeMinor}" stroke-width="1.5" />
+      <text x="${xMinor}" y="${yMinor + 4}" font-size="9" font-weight="700" text-anchor="middle" fill="${textMinorColor}">${NOTE_NAMES[pcMinor].toLowerCase()}m</text>
+    </g>`;
   }
   
   html += `</svg>`;

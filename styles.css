@@ -2729,3 +2729,18 @@ button.pipe-s.rec { border-color: #e0574f; color: #ffb4ae; }
   color: var(--accent-contrast);
   border-color: transparent;
 }
+
+/* ---- v92: krug kvinti interaktivni akordi ---- */
+.circle-chord-btn {
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.circle-chord-btn:hover {
+  filter: brightness(1.22);
+}
+
+.circle-chord-btn:hover circle {
+  stroke-width: 2px !important;
+  stroke: var(--accent) !important;
+}
