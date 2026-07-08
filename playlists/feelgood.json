@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "FeelGood",
-  "updatedAt": "2026-07-04T11:34:11.517Z",
+  "updatedAt": "2026-07-08T15:58:35.716Z",
   "settings": {
     "selectedSongId": "mr6ab8n4-vnn9o3",
     "seekSeconds": 1
@@ -12,7 +12,61 @@
       "title": "Luis - A delismo sve na pola",
       "key": "Amol",
       "url": "https://youtu.be/7wIwbe-F9eY",
-      "videoId": "7wIwbe-F9eY"
+      "videoId": "7wIwbe-F9eY",
+      "chords": [
+        {
+          "t": 8.5,
+          "n": "Am"
+        },
+        {
+          "t": 10.3,
+          "n": "E"
+        },
+        {
+          "t": 15,
+          "n": "Am"
+        },
+        {
+          "t": 19,
+          "n": "Em"
+        },
+        {
+          "t": 26.8,
+          "n": "Am"
+        },
+        {
+          "t": 27.8,
+          "n": "Dm"
+        },
+        {
+          "t": 32,
+          "n": "Am"
+        },
+        {
+          "t": 33.8,
+          "n": "C"
+        },
+        {
+          "t": 37.8,
+          "n": "Em"
+        },
+        {
+          "t": 49.5,
+          "n": "E"
+        },
+        {
+          "t": 55.5,
+          "n": "B"
+        },
+        {
+          "t": 61.3,
+          "n": "F"
+        },
+        {
+          "t": 63,
+          "n": "Dmaj7"
+        }
+      ]
     }
   ]
 }
