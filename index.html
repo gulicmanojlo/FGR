@@ -55,6 +55,9 @@
         <button id="themeToggle" class="icon-button" type="button" aria-label="Promeni temu" title="Tamna / svetla tema">
           <svg id="themeToggleIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
         </button>
+        <button id="sidebarToggle" class="icon-button" type="button" aria-label="Panel za ucenje" title="Prikazi / sakrij panel za ucenje" aria-expanded="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        </button>
         <button id="settingsToggle" class="icon-button" type="button" aria-label="Podesavanja" title="Podesavanja zvuka i sviranja" aria-expanded="false">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2.2" fill="currentColor" stroke="none"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2.2" fill="currentColor" stroke="none"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2.2" fill="currentColor" stroke="none"/></svg>
         </button>
@@ -342,14 +345,54 @@
             </div>
           </section>
 
-          <!-- SKIDANJE PESME -->
+          <!-- SKIDANJE PESME (PIPELINE) -->
           <section class="panel strip" aria-label="Skidanje pesme">
-            <div class="strip-head"><b>Skidanje pesme</b><span id="pipeStatus" class="pipe-status" aria-live="polite"></span></div>
-            <div class="pipe">
-              <button id="pipeRec" class="pipe-s" type="button" title="Klikni, izaberi OVAJ tab i cekiraj Deli audio — pesma krece sama od pocetka i snima se"><span class="n">1</span><span class="tt">Snimi jednom</span><span class="st" id="pipeRecSt"></span></button>
-              <button class="pipe-s" type="button" disabled title="Demucs u browseru — u izradi"><span class="n">2</span><span class="tt">Razdvoji kanale</span><span class="st">uskoro</span></button>
-              <button id="pipeChords" class="pipe-s" type="button" title="Analizira sacuvani snimak i upisuje akorde u chart"><span class="n">3</span><span class="tt">Prepoznaj akorde</span><span class="st" id="pipeChordsSt"></span></button>
-              <button id="pipeRead" class="pipe-s" type="button" title="Otvori chord chart ove pesme"><span class="n">4</span><span class="tt">Citaj iz memorije</span><span class="st" id="pipeReadSt"></span></button>
+            <div class="strip-head">
+              <b>Proces transkripcije (Skidanje pesme)</b>
+              <span id="pipeStatus" class="pipe-status" aria-live="polite"></span>
+            </div>
+            <div class="pipeline-flow">
+              <button id="pipeRec" class="pipe-step" type="button" title="Klikni, izaberi OVAJ tab i cekiraj Deli audio — pesma krece sama od pocetka i snima se">
+                <span class="step-num">1</span>
+                <div class="step-info">
+                  <span class="step-title tt">Snimi jednom</span>
+                  <span class="step-desc">Snimi audio iz YouTube-a</span>
+                </div>
+                <span class="step-status" id="pipeRecSt"></span>
+              </button>
+
+              <div class="pipeline-connector"></div>
+
+              <button class="pipe-step" type="button" disabled title="Razdvajanje vokala, ritma i basa pomoću AI modela (uskoro)">
+                <span class="step-num">2</span>
+                <div class="step-info">
+                  <span class="step-title">Razdvoji kanale</span>
+                  <span class="step-desc">AI filteri (Bass/Mid/High)</span>
+                </div>
+                <span class="step-status">uskoro</span>
+              </button>
+
+              <div class="pipeline-connector"></div>
+
+              <button id="pipeChords" class="pipe-step" type="button" title="Analizira sacuvani snimak i upisuje akorde u chart">
+                <span class="step-num">3</span>
+                <div class="step-info">
+                  <span class="step-title">Prepoznaj akorde</span>
+                  <span class="step-desc">DSP analiza harmonije</span>
+                </div>
+                <span class="step-status" id="pipeChordsSt"></span>
+              </button>
+
+              <div class="pipeline-connector"></div>
+
+              <button id="pipeRead" class="pipe-step" type="button" title="Otvori chord chart ove pesme">
+                <span class="step-num">4</span>
+                <div class="step-info">
+                  <span class="step-title">Čitaj iz memorije</span>
+                  <span class="step-desc">Pregled i korekcija akorda</span>
+                </div>
+                <span class="step-status" id="pipeReadSt"></span>
+              </button>
             </div>
           </section>
         </div>

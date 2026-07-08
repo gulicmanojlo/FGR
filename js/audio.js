@@ -1141,7 +1141,10 @@ const AN_TEMPLATES = [
   ["", [0, 4, 7]], 
   ["m", [0, 3, 7]], 
   ["7", [0, 4, 7, 10]], 
-  ["m7", [0, 3, 7, 10]]
+  ["m7", [0, 3, 7, 10]],
+  ["maj7", [0, 4, 7, 11]],
+  ["dim", [0, 3, 6]],
+  ["sus4", [0, 5, 7]]
 ];
 const AN_VECS = [];
 
@@ -1154,15 +1157,32 @@ AN_TEMPLATES.forEach((tpl) => {
 });
 
 function chromaFromSpectrum(dbArr, sampleRate, fftSize) {
-  const chroma = new Array(12).fill(0);
+  const midiBins = new Float32Array(128);
   for (let i = 0; i < dbArr.length; i++) {
     const freq = i * sampleRate / fftSize;
-    if (freq < 60) continue;
-    if (freq > 2200) break;
+    if (freq < 60 || freq > 2000) continue;
     const mag = Math.pow(10, dbArr[i] / 20);
-    if (!isFinite(mag) || mag < 1e-7) continue;
-    const midi = 69 + 12 * Math.log2(freq / 440);
-    chroma[((Math.round(midi) % 12) + 12) % 12] += mag;
+    if (!isFinite(mag) || mag < 1e-6) continue;
+    const midi = Math.round(69 + 12 * Math.log2(freq / 440));
+    if (midi >= 24 && midi < 108) {
+      midiBins[midi] += mag;
+    }
+  }
+
+  // Harmonic overtone subtraction (bottom-up filtering)
+  for (let m = 24; m < 96; m++) {
+    const val = midiBins[m];
+    if (val > 0.005) {
+      if (m + 12 < 128) midiBins[m + 12] = Math.max(0, midiBins[m + 12] - val * 0.45);
+      if (m + 19 < 128) midiBins[m + 19] = Math.max(0, midiBins[m + 19] - val * 0.3);
+      if (m + 24 < 128) midiBins[m + 24] = Math.max(0, midiBins[m + 24] - val * 0.2);
+      if (m + 28 < 128) midiBins[m + 28] = Math.max(0, midiBins[m + 28] - val * 0.15);
+    }
+  }
+
+  const chroma = new Array(12).fill(0);
+  for (let m = 24; m < 96; m++) {
+    chroma[m % 12] += midiBins[m];
   }
   return chroma;
 }
@@ -1180,13 +1200,20 @@ function bestChord(chroma) {
     for (let i = 0; i < 12; i++) {
       dot += norm[i] * c.vec[i];
     }
-    const score = dot / (len * c.norm);
+    let score = dot / (len * c.norm);
+    
+    // Bias: favor simple major/minor triads over complex 7/sus/dim chords
+    const isTriad = !c.name.includes("7") && !c.name.includes("sus") && !c.name.includes("dim");
+    if (isTriad) {
+      score *= 1.15; // 15% boost to simple major/minor triads
+    }
+    
     if (score > bestScore) {
       bestScore = score;
       best = c.name;
     }
   });
-  return bestScore > 0.68 ? best : null;
+  return bestScore > 0.72 ? best : null;
 }
 
 export function analyzeBuffer(buffer, onProgress) {

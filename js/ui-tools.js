@@ -1060,7 +1060,7 @@ export function transposeChordName(name) {
   return NOTE_NAMES[((pc + state.transpose) % 12 + 12) % 12] + m[2];
 }
 
-function parseChordName(name) {
+export function parseChordName(name) {
   var m = String(name || "").trim().match(/^(Cis|Dis|Fis|Gis|C|D|E|F|G|A|B|H)(.*)$/);
   if (!m) return null;
   var pc = NOTE_NAMES.indexOf(m[1]);

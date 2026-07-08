@@ -71,6 +71,7 @@ import {
   initMetronome,
   shownKey,
   transposeChordName,
+  parseChordName,
   getActiveHint
 } from "./ui-tools.js";
 
@@ -450,6 +451,30 @@ function bindEvents() {
     });
   }
 
+  const sidebarToggle = $("sidebarToggle");
+  const workArea = document.querySelector(".work");
+  if (sidebarToggle && workArea) {
+    sidebarToggle.addEventListener("click", () => {
+      const isHidden = workArea.classList.toggle("hide-rcol");
+      sidebarToggle.setAttribute("aria-expanded", isHidden ? "false" : "true");
+      sidebarToggle.classList.toggle("off", isHidden);
+      try {
+        const uiPrefs = readJsonStorage("fgr-ui-v1", {});
+        uiPrefs.hideRcol = isHidden;
+        writeJsonStorage("fgr-ui-v1", uiPrefs);
+      } catch (e) {}
+    });
+
+    try {
+      const uiPrefs = readJsonStorage("fgr-ui-v1", {});
+      if (uiPrefs.hideRcol) {
+        workArea.classList.add("hide-rcol");
+        sidebarToggle.setAttribute("aria-expanded", "false");
+        sidebarToggle.classList.add("off");
+      }
+    } catch (e) {}
+  }
+
   const addSongToggle = $("addSongToggle");
   const addSongForm = $("addSongForm");
   if (addSongToggle && addSongForm) {
@@ -512,10 +537,17 @@ function bindEvents() {
     state.keyElementsByMidi.forEach((element, midi) => {
       element.classList.toggle("is-active", midis.includes(midi));
     });
+    
+    if (state.practiceModeActive) {
+      checkPracticeChord();
+    }
   });
 
   window.addEventListener("fgr:midichange", () => {
     syncStage();
+    if (state.practiceModeActive) {
+      checkPracticeChord();
+    }
   });
 
   window.addEventListener("fgr:recupdate", () => {
@@ -641,6 +673,11 @@ function bindEvents() {
   }
 
   bindMixerEvents();
+
+  const practiceSongButton = $("practiceSongButton");
+  if (practiceSongButton) {
+    practiceSongButton.addEventListener("click", togglePracticeMode);
+  }
 
   // Periodicni tajmer za pracenje pesme i bojenje akorda na klavijaturi
   window.setInterval(trackPlaybackAndHighlight, 600);
@@ -2391,3 +2428,168 @@ window.FGRBridge = {
 
 // Pokretanje
 init();
+
+// ---------------- INTERAKTIVNI MOD ZA VEŽBANJE PESME ----------------
+function togglePracticeMode() {
+  const song = getSelectedSong();
+  if (!song) {
+    alert("Prvo izaberi pesmu u listi!");
+    return;
+  }
+  
+  if (!song.chords || !song.chords.length) {
+    alert("Ova pesma nema akorda u chartu. Snimi pesmu i pokreni 'Prepoznaj akorde' ili dodaj akorde ručno!");
+    return;
+  }
+
+  state.practiceModeActive = !state.practiceModeActive;
+  
+  const btn = $("practiceSongButton");
+  if (state.practiceModeActive) {
+    state.practiceSongChords = [...song.chords];
+    
+    // Zaustavi reprodukciju zvuka
+    if (rec.playing) recStop(true);
+    else if (state.youtubePlayer && typeof state.youtubePlayer.pauseVideo === "function") {
+      state.youtubePlayer.pauseVideo();
+    }
+    
+    // Nadji trenutni indeks akorda prema vremenu
+    const t = rec.playing ? recTime() : (state.youtubePlayerReady && typeof state.youtubePlayer.getCurrentTime === "function" ? Number(state.youtubePlayer.getCurrentTime()) || 0 : 0);
+    let index = 0;
+    for (let i = 0; i < state.practiceSongChords.length; i++) {
+      if (state.practiceSongChords[i].t <= t) {
+        index = i;
+      }
+    }
+    state.practiceCurrentIndex = index;
+    
+    if (btn) {
+      btn.innerHTML = "■ Zaustavi vežbanje";
+      btn.classList.add("practice-active");
+    }
+    
+    setPipeStatus("Režim vežbanja aktivan. Odsviraj akord označen plavom bojom na klaviru.");
+    highlightPracticeChord();
+  } else {
+    stopPracticeMode();
+  }
+}
+
+function stopPracticeMode() {
+  state.practiceModeActive = false;
+  state.practiceSongChords = null;
+  state.practiceCurrentIndex = -1;
+  
+  const btn = $("practiceSongButton");
+  if (btn) {
+    btn.innerHTML = "▶ Vežbaj ovu pesmu";
+    btn.classList.remove("practice-active");
+  }
+  
+  // Ocisti oznake sa tastature
+  state.keyElementsByMidi.forEach(el => el.classList.remove("practice-hint"));
+  setPipeStatus("");
+}
+
+function highlightPracticeChord() {
+  if (!state.practiceModeActive || !state.practiceSongChords) return;
+  const chord = state.practiceSongChords[state.practiceCurrentIndex];
+  if (!chord) {
+    playSuccessBeep();
+    alert("Čestitamo! Uspešno ste uvežbali pesmu!");
+    stopPracticeMode();
+    return;
+  }
+  
+  setPipeStatus(`Vežba: Odsviraj akord <b>${transposeChordName(chord.n)}</b> (na ${fmtTime(chord.t)})`);
+  paintPracticeChord(transposeChordName(chord.n));
+  
+  ["miniChart", "ccStrip"].forEach((id) => {
+    const wrap = $(id);
+    if (!wrap) return;
+    const cells = wrap.querySelectorAll("[data-t]");
+    cells.forEach((cell) => {
+      const match = Number(cell.dataset.t) === chord.t;
+      cell.classList.toggle("now", match);
+      cell.classList.toggle("on", match);
+      if (match && id === "ccStrip") {
+        cell.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      }
+    });
+  });
+}
+
+function paintPracticeChord(name) {
+  state.keyElementsByMidi.forEach(el => el.classList.remove("practice-hint"));
+  
+  const parsed = parseChordName(name);
+  if (!parsed) return;
+  
+  const targetPcs = parsed.ivs.map(iv => (parsed.pc + iv) % 12);
+  
+  state.keyElementsByMidi.forEach((el, midi) => {
+    const pc = ((midi % 12) + 12) % 12;
+    const octave = Math.floor(midi / 12) - 1;
+    if (targetPcs.includes(pc) && (octave === state.baseOctave || octave === state.baseOctave + 1)) {
+      el.classList.add("practice-hint");
+    }
+  });
+}
+
+function checkPracticeChord() {
+  if (!state.practiceModeActive || !state.practiceSongChords) return;
+  const chord = state.practiceSongChords[state.practiceCurrentIndex];
+  if (!chord) return;
+  
+  const parsed = parseChordName(transposeChordName(chord.n));
+  if (!parsed) return;
+  
+  const targetPcs = parsed.ivs.map(iv => (parsed.pc + iv) % 12);
+  
+  const activePcs = new Set();
+  midiHeld.forEach(m => activePcs.add(((m % 12) + 12) % 12));
+  state.activeMidiSet.forEach(m => activePcs.add(((m % 12) + 12) % 12));
+  
+  const isMatch = targetPcs.every(pc => activePcs.has(pc)) && activePcs.size === targetPcs.length;
+  if (isMatch) {
+    playSuccessBeep();
+    state.practiceCurrentIndex++;
+    
+    const nextChord = state.practiceSongChords[state.practiceCurrentIndex];
+    if (nextChord) {
+      if (rec.playing) recSeek(nextChord.t);
+      else if (state.youtubePlayerReady && typeof state.youtubePlayer.seekTo === "function") {
+        state.youtubePlayer.seekTo(nextChord.t, true);
+      }
+    }
+    
+    setTimeout(() => {
+      highlightPracticeChord();
+    }, 450);
+  }
+}
+
+function playSuccessBeep() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!state.audioContext) {
+    state.audioContext = new AudioContext();
+  }
+  const ctx = state.audioContext;
+  if (ctx.state === "suspended") ctx.resume();
+  
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(587.33, now); // D5
+  osc.frequency.setValueAtTime(880, now + 0.08); // A5
+  
+  gain.gain.setValueAtTime(0.12, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+  
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.26);
+}
