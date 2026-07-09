@@ -17,45 +17,19 @@ def log(msg):
 
 def process_song(song):
     song_id = song.get("id")
-    video_id = song.get("videoId")
-    if not song_id or not video_id:
-        log(f"Skipping song due to missing metadata: {song}")
+    if not song_id:
+        log(f"Skipping song due to missing ID: {song}")
+        return False
+
+    # Check if the local MP3 file exists in the root directory
+    local_mp3 = f"{song_id}.mp3"
+    if not os.path.exists(local_mp3):
+        # The file isn't present to be processed yet, which is normal
+        log(f"No local file {local_mp3} found in root. Skipping.")
         return False
 
     log(f"--- Processing song: {song.get('title')} ({song_id}) ---")
-    url = f"https://www.youtube.com/watch?v={video_id}"
-    
-    # 1. Download YouTube audio
-    log(f"Downloading audio from {url}...")
-    temp_mp3 = "temp_audio.mp3"
-    if os.path.exists(temp_mp3):
-        os.remove(temp_mp3)
-        
-    try:
-        # Using --impersonate chrome to bypass bot verification challenges
-        cmd = [
-            "yt-dlp",
-            "--impersonate", "chrome",
-            "-x",
-            "--audio-format",
-            "mp3",
-            "-o",
-            temp_mp3,
-            url
-        ]
-        log(f"Running command: {' '.join(cmd)}")
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        log("yt-dlp stdout:")
-        log(res.stdout)
-        log("yt-dlp stderr:")
-        log(res.stderr)
-        
-        if res.returncode != 0:
-            raise Exception(f"yt-dlp exited with code {res.returncode}")
-            
-    except Exception as e:
-        log(f"Failed to download audio for {song_id}: {e}")
-        return False
+    log(f"Found local file {local_mp3}. Starting separation...")
 
     # 2. Run Demucs
     log("Running Demucs stem separation...")
@@ -67,7 +41,7 @@ def process_song(song):
             "demucs",
             "-d", "cpu",
             "-n", "htdemucs",
-            temp_mp3
+            local_mp3
         ]
         log(f"Running command: {' '.join(cmd)}")
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -81,8 +55,6 @@ def process_song(song):
             
     except Exception as e:
         log(f"Demucs processing failed for {song_id}: {e}")
-        if os.path.exists(temp_mp3):
-            os.remove(temp_mp3)
         return False
 
     # 3. Convert Wav stems to Mp3 and save in samples/
@@ -93,7 +65,8 @@ def process_song(song):
     
     try:
         for stem in stems:
-            wav_path = f"separated/htdemucs/temp_audio/{stem}.wav"
+            # Input file was '{song_id}.mp3', so demucs outputs to separated/htdemucs/{song_id}/
+            wav_path = f"separated/htdemucs/{song_id}/{stem}.wav"
             mp3_path = f"{output_dir}/{stem}.mp3"
             
             if not os.path.exists(wav_path):
@@ -110,13 +83,16 @@ def process_song(song):
             if res.returncode != 0:
                 raise Exception(f"ffmpeg exited with code {res.returncode}")
             log(f"Saved stem: {mp3_path}")
+            
+        # Remove the uploaded raw MP3 from the root
+        os.remove(local_mp3)
+        log(f"Deleted source file: {local_mp3}")
+        
     except Exception as e:
         log(f"FFmpeg conversion failed for {song_id}: {e}")
         return False
     finally:
-        # Cleanup temp directories
-        if os.path.exists(temp_mp3):
-            os.remove(temp_mp3)
+        # Cleanup temp directory
         if os.path.exists("separated"):
             shutil.rmtree("separated")
             
