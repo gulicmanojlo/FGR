@@ -2450,6 +2450,49 @@ function runOfflineChordAnalysis() {
     setPipeStatus("Prvo izaberi pesmu.");
     return;
   }
+  
+  const hasStems = song && song.stems === true;
+  
+  if (hasStems) {
+    setPipeStatus("Analiziram AI instrumental… (može potrajati)");
+    const actx = new (window.AudioContext || window.webkitAudioContext)();
+    const url = `samples/${song.id}/other.mp3`;
+    
+    fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error("Ne mogu da preuzmem AI instrumental.");
+        return r.arrayBuffer();
+      })
+      .then((data) => actx.decodeAudioData(data))
+      .then((buffer) => window.FGRAnalyzeBuffer(buffer, (p) => {
+        setPipeStatus("Analiziram… " + Math.round(p * 100) + "%");
+      }))
+      .then((chords) => {
+        actx.close().catch(() => {});
+        if (!chords.length) {
+          setPipeStatus("Nisam uspeo da prepoznam akorde iz ovog snimka.");
+          return;
+        }
+        
+        if (song.chords && song.chords.length && !confirm("Pesma već ima " + song.chords.length + " akorada u chartu. Da ih zamenim sa " + chords.length + " prepoznatih?")) {
+          setPipeStatus("");
+          return;
+        }
+        
+        song.chords = chords;
+        saveRepertoire();
+        updateSelectedSongPanel();
+        renderMiniChart();
+        if (state.tool === "chart") renderTool();
+        refreshPipe();
+        setPipeStatus("Upisano " + chords.length + " akorada u chart. Proveri ih i ispravi po sluhu.");
+      })
+      .catch((err) => {
+        setPipeStatus("Greška: " + err.message);
+      });
+    return;
+  }
+  
   const id = recId();
   dbGet(id).then((item) => {
     if (!item) {
