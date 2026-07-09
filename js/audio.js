@@ -859,7 +859,11 @@ export const rec = {
   },
   playing: false,
   offset: 0,
-  startedAt: 0
+  startedAt: 0,
+  hasStems: false,
+  stems: null,
+  sources: [],
+  pitchShifters: []
 };
 
 export function recRate() {
@@ -872,10 +876,23 @@ export function recTime() {
 }
 
 export function recStop(keepOffset) {
+  if (rec.sources && rec.sources.length) {
+    rec.sources.forEach((source) => {
+      source.onended = null;
+      try { source.stop(); } catch (e) {}
+    });
+    rec.sources = [];
+  }
   if (rec.source) {
     rec.source.onended = null;
     try { rec.source.stop(); } catch (e) {}
     rec.source = null;
+  }
+  if (rec.pitchShifters && rec.pitchShifters.length) {
+    rec.pitchShifters.forEach((shifter) => {
+      try { shifter.disconnect(); } catch (e) {}
+    });
+    rec.pitchShifters = [];
   }
   if (rec.pitchShifter) {
     try { rec.pitchShifter.disconnect(); } catch (e) {}
@@ -927,94 +944,131 @@ export function recPlayFrom(offset) {
   recStop(false);
   rec.offset = Math.max(0, Math.min(offset, rec.buffer.duration - 0.1));
   
-  rec.source = rec.ctx.createBufferSource();
-  rec.source.buffer = rec.buffer;
-  rec.source.playbackRate.value = state.playbackRate;
-  
-  // Izracunavanje potrebnog pitch shifta da kompenzuje promenu brzine i primeni transpoziciju
   const speedSemitones = 12 * Math.log2(state.playbackRate);
   const shiftSemitones = state.transpose - speedSemitones;
-  
-  rec.pitchShifter = createPitchShifter(rec.ctx, shiftSemitones);
-  
-  // Kreiranje filterskih skretnica za simulaciju stem-razdvajanja (strmi 24dB i 36dB/oktavi rezovi)
-  const bassFilter1 = rec.ctx.createBiquadFilter();
-  bassFilter1.type = "lowpass";
-  bassFilter1.frequency.value = 220;
-  const bassFilter2 = rec.ctx.createBiquadFilter();
-  bassFilter2.type = "lowpass";
-  bassFilter2.frequency.value = 220;
-  const bassFilter3 = rec.ctx.createBiquadFilter();
-  bassFilter3.type = "lowpass";
-  bassFilter3.frequency.value = 220;
 
-  const midHP1 = rec.ctx.createBiquadFilter();
-  midHP1.type = "highpass";
-  midHP1.frequency.value = 220;
-  const midHP2 = rec.ctx.createBiquadFilter();
-  midHP2.type = "highpass";
-  midHP2.frequency.value = 220;
-
-  const midLP1 = rec.ctx.createBiquadFilter();
-  midLP1.type = "lowpass";
-  midLP1.frequency.value = 3300;
-  const midLP2 = rec.ctx.createBiquadFilter();
-  midLP2.type = "lowpass";
-  midLP2.frequency.value = 3300;
-
-  const highFilter1 = rec.ctx.createBiquadFilter();
-  highFilter1.type = "highpass";
-  highFilter1.frequency.value = 3300;
-  const highFilter2 = rec.ctx.createBiquadFilter();
-  highFilter2.type = "highpass";
-  highFilter2.frequency.value = 3300;
-  const highFilter3 = rec.ctx.createBiquadFilter();
-  highFilter3.type = "highpass";
-  highFilter3.frequency.value = 3300;
-
-  // Kreiranje gain cvorova
+  // Initialize gain nodes
   rec.gains.bass = rec.ctx.createGain();
   rec.gains.mid = rec.ctx.createGain();
   rec.gains.high = rec.ctx.createGain();
 
-  // Povezivanje Pitch Shiftera sa pocetnim filterima grana
-  rec.source.connect(rec.pitchShifter.input);
-  rec.pitchShifter.output.connect(bassFilter1);
-  rec.pitchShifter.output.connect(midHP1);
-  rec.pitchShifter.output.connect(highFilter1);
-
-  // Kaskadno povezivanje frekvencijskih grana sa gainovima
-  // Bas grana (3-struki lowpass)
-  bassFilter1.connect(bassFilter2);
-  bassFilter2.connect(bassFilter3);
-  bassFilter3.connect(rec.gains.bass);
-  
-  // Srednja/vokal grana (2-struki highpass pa 2-struki lowpass)
-  midHP1.connect(midHP2);
-  midHP2.connect(midLP1);
-  midLP1.connect(midLP2);
-  midLP2.connect(rec.gains.mid);
-  
-  // Visoka/ritam grana (3-struki highpass)
-  highFilter1.connect(highFilter2);
-  highFilter2.connect(highFilter3);
-  highFilter3.connect(rec.gains.high);
-
-  // Povezivanje sa master izlazom
   const dest = state.masterGain || rec.ctx.destination;
   rec.gains.bass.connect(dest);
   rec.gains.mid.connect(dest);
   rec.gains.high.connect(dest);
 
-  // Primenjivanje trenutnih nivoa miksera
+  rec.sources = [];
+  rec.pitchShifters = [];
+
+  if (rec.hasStems && rec.stems) {
+    const stemsToLoad = [
+      { name: "bass", destNode: rec.gains.bass, pitchShift: true },
+      { name: "vocals", destNode: rec.gains.mid, pitchShift: true },
+      { name: "other", destNode: rec.gains.mid, pitchShift: true },
+      { name: "drums", destNode: rec.gains.high, pitchShift: false }
+    ];
+
+    stemsToLoad.forEach((stemInfo) => {
+      const buf = rec.stems[stemInfo.name];
+      if (!buf) return;
+
+      const source = rec.ctx.createBufferSource();
+      source.buffer = buf;
+      source.playbackRate.value = state.playbackRate;
+      rec.sources.push(source);
+
+      let lastNode = source;
+
+      if (stemInfo.pitchShift) {
+        const shifter = createPitchShifter(rec.ctx, shiftSemitones);
+        rec.pitchShifters.push(shifter);
+        lastNode.connect(shifter.input);
+        lastNode = shifter.output;
+      }
+
+      lastNode.connect(stemInfo.destNode);
+    });
+
+    const playTime = rec.ctx.currentTime;
+    rec.sources.forEach((source) => {
+      source.start(playTime, rec.offset);
+    });
+
+    const mainSource = rec.sources.find(s => s.buffer === rec.stems.other) || rec.sources[0];
+    if (mainSource) {
+      mainSource.onended = function () {
+        if (rec.playing) recStop(false);
+        window.dispatchEvent(new CustomEvent("fgr:recupdate"));
+      };
+    }
+  } else {
+    rec.source = rec.ctx.createBufferSource();
+    rec.source.buffer = rec.buffer;
+    rec.source.playbackRate.value = state.playbackRate;
+
+    rec.pitchShifter = createPitchShifter(rec.ctx, shiftSemitones);
+
+    const bassFilter1 = rec.ctx.createBiquadFilter();
+    bassFilter1.type = "lowpass";
+    bassFilter1.frequency.value = 220;
+    const bassFilter2 = rec.ctx.createBiquadFilter();
+    bassFilter2.type = "lowpass";
+    bassFilter2.frequency.value = 220;
+    const bassFilter3 = rec.ctx.createBiquadFilter();
+    bassFilter3.type = "lowpass";
+    bassFilter3.frequency.value = 220;
+
+    const midHP1 = rec.ctx.createBiquadFilter();
+    midHP1.type = "highpass";
+    midHP1.frequency.value = 220;
+    const midHP2 = rec.ctx.createBiquadFilter();
+    midHP2.type = "highpass";
+    midHP2.frequency.value = 220;
+
+    const midLP1 = rec.ctx.createBiquadFilter();
+    midLP1.type = "lowpass";
+    midLP1.frequency.value = 3300;
+    const midLP2 = rec.ctx.createBiquadFilter();
+    midLP2.type = "lowpass";
+    midLP2.frequency.value = 3300;
+
+    const highFilter1 = rec.ctx.createBiquadFilter();
+    highFilter1.type = "highpass";
+    highFilter1.frequency.value = 3300;
+    const highFilter2 = rec.ctx.createBiquadFilter();
+    highFilter2.type = "highpass";
+    highFilter2.frequency.value = 3300;
+    const highFilter3 = rec.ctx.createBiquadFilter();
+    highFilter3.type = "highpass";
+    highFilter3.frequency.value = 3300;
+
+    rec.source.connect(rec.pitchShifter.input);
+    rec.pitchShifter.output.connect(bassFilter1);
+    rec.pitchShifter.output.connect(midHP1);
+    rec.pitchShifter.output.connect(highFilter1);
+
+    bassFilter1.connect(bassFilter2);
+    bassFilter2.connect(bassFilter3);
+    bassFilter3.connect(rec.gains.bass);
+
+    midHP1.connect(midHP2);
+    midHP2.connect(midLP1);
+    midLP1.connect(midLP2);
+    midLP2.connect(rec.gains.mid);
+
+    highFilter1.connect(highFilter2);
+    highFilter2.connect(highFilter3);
+    highFilter3.connect(rec.gains.high);
+
+    rec.source.onended = function () {
+      if (rec.playing) recStop(false);
+      window.dispatchEvent(new CustomEvent("fgr:recupdate"));
+    };
+
+    rec.source.start(0, rec.offset);
+  }
+
   updateMixerGains();
-  
-  rec.source.onended = function () {
-    if (rec.playing) recStop(false);
-    window.dispatchEvent(new CustomEvent("fgr:recupdate"));
-  };
-  
-  rec.source.start(0, rec.offset);
   rec.startedAt = rec.ctx.currentTime;
   rec.playing = true;
   
@@ -1100,15 +1154,53 @@ function getSelectedSong() {
 }
 
 export function recLoad() {
-  const id = recId();
-  if (!id) return Promise.resolve(false);
+  const song = getSelectedSong();
+  if (!song) return Promise.resolve(false);
+  const id = "song-" + song.id;
   if (rec.buffer && rec.bufferId === id) return Promise.resolve(true);
+
+  const ctx = ensureAudio();
+  rec.ctx = ctx;
+
+  if (song.stems) {
+    rec.hasStems = true;
+    rec.stems = {};
+    const stemNames = ["bass", "vocals", "drums", "other"];
+    const promises = stemNames.map((name) => {
+      const url = `samples/${song.id}/${name}.mp3`;
+      return fetch(url)
+        .then((r) => {
+          if (!r.ok) throw new Error(`Failed to fetch stem: ${name}`);
+          return r.arrayBuffer();
+        })
+        .then((data) => ctx.decodeAudioData(data))
+        .then((buffer) => {
+          rec.stems[name] = buffer;
+        });
+    });
+
+    return Promise.all(promises)
+      .then(() => {
+        rec.buffer = rec.stems.other;
+        rec.bufferId = id;
+        return true;
+      })
+      .catch((err) => {
+        console.error("Error loading stems:", err);
+        rec.hasStems = false;
+        return loadLegacyRecording(id);
+      });
+  } else {
+    rec.hasStems = false;
+    return loadLegacyRecording(id);
+  }
+}
+
+function loadLegacyRecording(id) {
   return dbGet(id).then(function (item) {
     if (!item) return false;
-    const ctx = ensureAudio();
-    rec.ctx = ctx;
     return item.blob.arrayBuffer().then(function (data) {
-      return ctx.decodeAudioData(data);
+      return rec.ctx.decodeAudioData(data);
     }).then(function (buffer) {
       rec.buffer = buffer;
       rec.bufferId = id;
