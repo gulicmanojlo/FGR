@@ -271,7 +271,21 @@
           "n": "G"
         }
       ],
-      "stems": false
+      "stems": true,
+      "processing": {
+        "state": "ready",
+        "stage": "complete",
+        "message": "AI stemovi su spremni.",
+        "updatedAt": "2026-07-09T23:48:40.937554+00:00"
+      },
+      "availableStems": [
+        "bass",
+        "drums",
+        "guitar",
+        "piano",
+        "vocals",
+        "other"
+      ]
     },
     {
       "id": "mre31tzw-rwx8sw",
