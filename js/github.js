@@ -118,6 +118,8 @@ export function buildRepertoireFileData() {
       url: song.url,
       videoId: song.videoId,
       ...(song.stems ? { stems: song.stems } : {}),
+      ...(Array.isArray(song.availableStems) && song.availableStems.length ? { availableStems: song.availableStems } : {}),
+      ...(song.processing ? { processing: song.processing } : {}),
       ...(Array.isArray(song.chords) && song.chords.length ? { chords: song.chords } : {})
     }))
   };
@@ -147,6 +149,10 @@ function normalizeSong(song) {
         .filter((chord) => chord.n)
         .sort((a, b) => a.t - b.t)
     : [];
+  const processing = normalizeProcessing(song?.processing);
+  const availableStems = Array.isArray(song?.availableStems)
+    ? song.availableStems.map((stem) => String(stem || "").trim()).filter(Boolean)
+    : [];
   return {
     id: String(song?.id || createSongId()),
     title: String(song?.title || ""),
@@ -154,7 +160,21 @@ function normalizeSong(song) {
     url,
     videoId,
     chords,
-    stems: Boolean(song?.stems)
+    stems: Boolean(song?.stems),
+    availableStems,
+    processing
+  };
+}
+
+function normalizeProcessing(processing) {
+  if (!processing || typeof processing !== "object") return null;
+  const state = String(processing.state || "").trim().toLowerCase();
+  if (!state) return null;
+  return {
+    state,
+    stage: String(processing.stage || "").trim(),
+    message: String(processing.message || "").trim(),
+    updatedAt: String(processing.updatedAt || "").trim()
   };
 }
 

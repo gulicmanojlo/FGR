@@ -15,6 +15,8 @@ desktop.ini
 *.tmp
 tmp/
 temp/
+__pycache__/
+separated/
 
 # Dependencies/build output if added later
 node_modules/

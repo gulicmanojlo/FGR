@@ -1362,7 +1362,6 @@ async function loadPlaylistFromServer(playlist) {
     }
     const rawData = await response.json();
     const data = normalizeRepertoireFileData(rawData);
-    ensureGitHubToken();
     
     // Primeni playlistu
     state.activePlaylistName = data.name || playlist.name;
@@ -1488,7 +1487,13 @@ function addSongFromInputs() {
     key,
     url,
     videoId,
-    chords: []
+    chords: [],
+    stems: false,
+    processing: createProcessingStatus(
+      "queued",
+      "source",
+      "Čeka preuzimanje i AI obradu povezanog izvora."
+    )
   };
 
   state.repertoire.push(song);
@@ -1508,6 +1513,15 @@ function parseYouTubeVideoId(url) {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
   const match = String(url || "").match(regExp);
   return match && match[2].length === 11 ? match[2] : "";
+}
+
+function createProcessingStatus(stateName, stage, message) {
+  return {
+    state: stateName,
+    stage,
+    message,
+    updatedAt: new Date().toISOString()
+  };
 }
 
 function renderCompactSongList() {

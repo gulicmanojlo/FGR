@@ -3,9 +3,14 @@ import subprocess
 import json
 import shutil
 import re
+from datetime import datetime, timezone
 
 PLAYLISTS_DIR = "playlists"
 LOG_FILE = "samples/stems_log.txt"
+DEMUCS_MODEL = "htdemucs_6s"
+STEM_NAMES = ["bass", "drums", "guitar", "piano", "vocals", "other"]
+SUPPORTED_SOURCE_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".webm"}
+QUEUED_PROCESSING_STATES = {"queued", "retry"}
 
 os.makedirs("samples", exist_ok=True)
 log_f = open(LOG_FILE, "w", encoding="utf-8")
@@ -30,7 +35,7 @@ def slugify(text):
     return text
 
 def parse_mp3_filename(filename):
-    name_without_ext = filename[:-4]
+    name_without_ext = os.path.splitext(filename)[0]
     parts = [p.strip() for p in name_without_ext.split(" - ") if p.strip()]
     if len(parts) == 3:
         title = f"{parts[0]} - {parts[1]}"
@@ -45,7 +50,7 @@ def parse_mp3_filename(filename):
 
 def download_youtube_audio(video_url, song_id):
     log(f"Attempting to download YouTube audio for {song_id} from {video_url}...")
-    output_filename = f"{song_id}.mp3"
+    output_filename = f"{song_id}.wav"
 
     if os.path.exists(output_filename):
         os.remove(output_filename)
@@ -54,8 +59,7 @@ def download_youtube_audio(video_url, song_id):
         "yt-dlp",
         "--no-playlist",
         "-x",
-        "--audio-format", "mp3",
-        "--audio-quality", "0",
+        "--audio-format", "wav",
         "-o", f"{song_id}.%(ext)s",
         video_url
     ]
@@ -70,8 +74,11 @@ def download_youtube_audio(video_url, song_id):
         raise Exception(f"yt-dlp download failed with code {res.returncode}")
 
     if not os.path.exists(output_filename):
-        # In case it downloaded as something else, check if any mp3 matches
-        temp_files = [f for f in os.listdir(".") if f.startswith(song_id) and f.endswith(".mp3")]
+        # yt-dlp/ffmpeg may choose a different extension on failure or fallback.
+        temp_files = [
+            f for f in os.listdir(".")
+            if f.startswith(song_id) and os.path.splitext(f)[1].lower() in SUPPORTED_SOURCE_EXTENSIONS
+        ]
         if temp_files:
             shutil.move(temp_files[0], output_filename)
         else:
@@ -80,8 +87,8 @@ def download_youtube_audio(video_url, song_id):
     log(f"Successfully downloaded YouTube audio to {output_filename}")
     return output_filename
 
-def process_song_stems(song_id, local_mp3):
-    log(f"Starting 6-stem Demucs separation for {song_id} using source {local_mp3}...")
+def process_song_stems(song_id, local_audio):
+    log(f"Starting 6-stem Demucs separation for {song_id} using source {local_audio}...")
 
     log("Cleaning up temp directories...")
     if os.path.exists("separated"):
@@ -92,8 +99,8 @@ def process_song_stems(song_id, local_mp3):
         cmd = [
             "demucs",
             "-d", "cpu",
-            "-n", "htdemucs_6",
-            local_mp3
+            "-n", DEMUCS_MODEL,
+            local_audio
         ]
         log(f"Running command: {' '.join(cmd)}")
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -107,19 +114,18 @@ def process_song_stems(song_id, local_mp3):
 
     except Exception as e:
         log(f"Demucs processing failed for {song_id}: {e}")
-        return False
+        return False, str(e)
 
-    log("Converting isolated stems to high-quality MP3 (256kbps)...")
-    stems = ["bass", "drums", "guitar", "piano", "vocals", "other"]
+    log("Converting isolated stems to browser-ready MP3 (320kbps)...")
     output_dir = f"samples/{song_id}"
     os.makedirs(output_dir, exist_ok=True)
 
     try:
         # input name without extension for directory path matching
-        input_name_clean = os.path.splitext(local_mp3)[0]
+        input_name_clean = os.path.splitext(os.path.basename(local_audio))[0]
 
-        for stem in stems:
-            wav_path = f"separated/htdemucs_6/{input_name_clean}/{stem}.wav"
+        for stem in STEM_NAMES:
+            wav_path = f"separated/{DEMUCS_MODEL}/{input_name_clean}/{stem}.wav"
             mp3_path = f"{output_dir}/{stem}.mp3"
 
             if not os.path.exists(wav_path):
@@ -129,7 +135,9 @@ def process_song_stems(song_id, local_mp3):
                 "ffmpeg",
                 "-y",
                 "-i", wav_path,
-                "-ab", "256k",
+                "-c:a", "libmp3lame",
+                "-b:a", "320k",
+                "-map_metadata", "-1",
                 mp3_path
             ]
             res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -137,20 +145,67 @@ def process_song_stems(song_id, local_mp3):
                 raise Exception(f"ffmpeg exited with code {res.returncode} for stem {stem}")
             log(f"Saved stem: {mp3_path}")
 
-        # Clean up source file
-        if os.path.exists(local_mp3):
-            os.remove(local_mp3)
-            log(f"Deleted source file: {local_mp3}")
-
     except Exception as e:
         log(f"FFmpeg conversion failed for {song_id}: {e}")
-        return False
+        return False, str(e)
     finally:
         if os.path.exists("separated"):
             shutil.rmtree("separated")
 
     log(f"Successfully processed 6 stems for {song_id}!")
-    return True
+    return True, ""
+
+def set_processing(song, state, stage, message=""):
+    song["processing"] = {
+        "state": state,
+        "stage": stage,
+        "message": message,
+        "updatedAt": datetime.now(timezone.utc).isoformat()
+    }
+
+def is_processing_requested(song):
+    state = str((song.get("processing") or {}).get("state") or "").lower()
+    return state in QUEUED_PROCESSING_STATES
+
+def mark_ready(song):
+    song["stems"] = True
+    song["availableStems"] = STEM_NAMES
+    set_processing(song, "ready", "complete", "AI stemovi su spremni.")
+
+def mark_failed(song, stage, message):
+    song["stems"] = False
+    set_processing(song, "failed", stage, message)
+
+def process_queued_remote_songs(songs):
+    modified = False
+    for song in songs:
+        if not (is_processing_requested(song) and (song.get("url") or song.get("videoId"))):
+            continue
+
+        song_id = song.get("id")
+        youtube_url = song.get("url") or f"https://www.youtube.com/watch?v={song.get('videoId')}"
+        log(f"Processing queued remote source for {song_id}: {youtube_url}")
+
+        downloaded_file = None
+        try:
+            set_processing(song, "downloading", "source", "Preuzimam audio iz povezanog izvora.")
+            downloaded_file = download_youtube_audio(youtube_url, song_id)
+            set_processing(song, "separating", "separation", "Razdvajam AI stemove.")
+            success, error = process_song_stems(song_id, downloaded_file)
+            if success:
+                mark_ready(song)
+            else:
+                mark_failed(song, "separation", error or "Demucs nije uspeo da obradi audio.")
+            modified = True
+        except Exception as e:
+            log(f"Failed to process remote source for {song_id}: {e}")
+            mark_failed(song, "source", str(e))
+            modified = True
+        finally:
+            if downloaded_file and os.path.exists(downloaded_file):
+                os.remove(downloaded_file)
+
+    return modified
 
 def main():
     log("Starting stem processing script...")
@@ -158,8 +213,14 @@ def main():
         log(f"Playlists directory not found: {PLAYLISTS_DIR}")
         return
 
-    # Scan for any uploaded local MP3 files first
-    mp3_files = [f for f in os.listdir(".") if f.endswith(".mp3") and f != "temp_audio.mp3"]
+    # Scan for uploaded local audio first. The source stays outside samples/ so it
+    # never becomes part of the browser assets by accident.
+    audio_files = [
+        f for f in os.listdir(".")
+        if os.path.isfile(f)
+        and os.path.splitext(f)[1].lower() in SUPPORTED_SOURCE_EXTENSIONS
+        and f != "temp_audio.mp3"
+    ]
 
     playlist_files = [f for f in os.listdir(PLAYLISTS_DIR) if f.endswith(".json")]
     if not playlist_files:
@@ -179,15 +240,19 @@ def main():
     songs = active_playlist.setdefault("songs", [])
     playlist_modified = False
 
-    # 1. Process uploaded local MP3s
-    for mp3_filename in mp3_files:
-        title, key = parse_mp3_filename(mp3_filename)
+    # 1. Process uploaded local audio files.
+    for audio_filename in audio_files:
+        title, key = parse_mp3_filename(audio_filename)
         song_id = slugify(title)
 
-        log(f"Processing uploaded file: {mp3_filename}")
+        log(f"Processing uploaded file: {audio_filename}")
         log(f"Parsed Title: {title}, Key: {key}, ID: {song_id}")
 
         existing_song = next((s for s in songs if s.get("id") == song_id), None)
+        if existing_song and existing_song.get("stems") is True:
+            log(f"Song {song_id} already has stems. Skipping source file.")
+            continue
+
         if existing_song:
             log(f"Song {song_id} already exists. Updating.")
             existing_song["key"] = key or existing_song.get("key", "")
@@ -206,43 +271,40 @@ def main():
             songs.append(new_song)
             existing_song = new_song
 
-        with open(default_playlist_path, "w", encoding="utf-8") as f:
-            json.dump(active_playlist, f, ensure_ascii=False, indent=2)
-
-        clean_local_mp3 = f"{song_id}.mp3"
-        shutil.move(mp3_filename, clean_local_mp3)
-
-        success = process_song_stems(song_id, clean_local_mp3)
+        set_processing(existing_song, "separating", "separation", "Razdvajam AI stemove iz lokalnog audio fajla.")
+        success, error = process_song_stems(song_id, audio_filename)
         if success:
-            existing_song["stems"] = True
+            mark_ready(existing_song)
             playlist_modified = True
         else:
-            if os.path.exists(clean_local_mp3):
-                shutil.move(clean_local_mp3, mp3_filename)
+            mark_failed(existing_song, "separation", error or "Demucs nije uspeo da obradi audio.")
+            playlist_modified = True
 
-    # 2. Check playlist songs with stems=False and try to download them from YouTube if they have a URL
-    for song in songs:
-        if song.get("stems") is False and (song.get("url") or song.get("videoId")):
-            song_id = song.get("id")
-            youtube_url = song.get("url") or f"https://www.youtube.com/watch?v={song.get('videoId')}"
-            log(f"Playlist song {song_id} is marked stems=False and has a YouTube link: {youtube_url}")
-
-            try:
-                downloaded_file = download_youtube_audio(youtube_url, song_id)
-                success = process_song_stems(song_id, downloaded_file)
-                if success:
-                    song["stems"] = True
-                    playlist_modified = True
-            except Exception as e:
-                log(f"Failed to process YouTube download/separation for {song_id}: {e}")
-                # We do not crash the script, we just skip it so other files can continue
-                continue
+    # 2. Process explicitly queued remote sources in the default playlist.
+    playlist_modified = process_queued_remote_songs(songs) or playlist_modified
 
     # Save playlist with final changes
-    if playlist_modified or len(mp3_files) > 0:
+    if playlist_modified or len(audio_files) > 0:
         log(f"Saving final playlist updates to {default_playlist_path}...")
         with open(default_playlist_path, "w", encoding="utf-8") as f:
             json.dump(active_playlist, f, ensure_ascii=False, indent=2)
+
+    # Other playlists can have their own queued songs even though uploaded local
+    # files still use the default playlist for backwards compatibility.
+    for playlist_file in playlist_files:
+        if playlist_file == default_playlist_file:
+            continue
+        playlist_path = os.path.join(PLAYLISTS_DIR, playlist_file)
+        try:
+            with open(playlist_path, "r", encoding="utf-8") as f:
+                playlist = json.load(f)
+            playlist_songs = playlist.setdefault("songs", [])
+            if process_queued_remote_songs(playlist_songs):
+                log(f"Saving processed queue to {playlist_path}...")
+                with open(playlist_path, "w", encoding="utf-8") as f:
+                    json.dump(playlist, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            log(f"Failed to process playlist queue in {playlist_path}: {e}")
 
     log("Main processing finished.")
     log_f.close()
