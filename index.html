@@ -37,7 +37,7 @@
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=95">
+    <link rel="stylesheet" href="styles.css?v=96">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="FGR aplikacija">
@@ -58,121 +58,7 @@
         <button id="sidebarToggle" class="icon-button" type="button" aria-label="Panel za ucenje" title="Prikazi / sakrij panel za ucenje" aria-expanded="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
         </button>
-        <button id="settingsToggle" class="icon-button" type="button" aria-label="Podesavanja" title="Podesavanja zvuka i sviranja" aria-expanded="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2.2" fill="currentColor" stroke="none"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2.2" fill="currentColor" stroke="none"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2.2" fill="currentColor" stroke="none"/></svg>
-        </button>
       </header>
-
-      <!-- ================= PODESAVANJA (fioka) ================= -->
-      <section id="settingsPanel" class="settings-panel" aria-label="Podesavanja" hidden>
-        <div class="settings-inner">
-          <section class="toolbar-section" aria-label="Izgled">
-            <span class="toolbar-title">Izgled</span>
-            <div class="toolbar-controls">
-              <div class="segmented compact" role="radiogroup" aria-label="Izbor teme">
-                <label><input type="radio" name="uiTheme" value="dark" checked><span>Tamna</span></label>
-                <label><input type="radio" name="uiTheme" value="light"><span>Svetla</span></label>
-              </div>
-            </div>
-          </section>
-
-          <section class="toolbar-section" aria-label="MIDI klavijatura">
-            <span class="toolbar-title">MIDI</span>
-            <div class="toolbar-controls">
-              <button id="midiConnectBtn" class="text-button" type="button">&#128268; Povezi klavijaturu</button>
-              <span id="midiSettingsStatus" class="control-label">nije povezana</span>
-              <span class="control-label" style="font-weight:600">USB kabl u &bdquo;USB DEVICE&rdquo; port klavijature &rarr; ra&#269;unar/tablet. &#352;ta god odsvira&#353; vidi se na klaviru dole i u &bdquo;Svira se&rdquo;.</span>
-            </div>
-          </section>
-
-          <section class="toolbar-section sound-section" aria-label="Zvuk">
-            <span class="toolbar-title">Zvuk</span>
-            <div class="toolbar-controls">
-              <section class="control-group volume-control" aria-label="Jacina zvuka">
-                <span class="control-label">Jacina</span>
-                <input id="volumeControl" class="volume-slider" type="range" min="0" max="100" value="70" aria-label="Jacina zvuka">
-              </section>
-              <section class="control-group sound-control" aria-label="Izbor zvuka">
-                <label class="select-label" for="instrumentSelect">Instrument</label>
-                <select id="instrumentSelect" class="sound-select">
-                  <option value="grand-piano" selected>Grand piano</option>
-                  <option value="choir">Hor</option>
-                  <option value="warm-synth">Warm synth</option>
-                  <option value="accordion">Harmonika</option>
-                  <option value="organ">Organ</option>
-                  <option value="guitar">Gitara</option>
-                  <option value="trumpet">Truba</option>
-                  <option value="brass">Brass</option>
-                </select>
-              </section>
-              <section class="control-group sustain-control" aria-label="Sustain">
-                <label class="toggle-row"><input id="sustainToggle" type="checkbox"><span>Sustain</span></label>
-              </section>
-              <section class="control-group sustain-length-control" aria-label="Duzina sustaina">
-                <label class="select-label" for="sustainLengthControl">Trajanje</label>
-                <input id="sustainLengthControl" class="mini-slider" type="range" min="0.2" max="8.1" step="0.1" value="2.5">
-                <output id="sustainLengthDisplay" class="mini-output">2.5s</output>
-              </section>
-            </div>
-          </section>
-
-          <section class="toolbar-section play-section" aria-label="Sviranje">
-            <span class="toolbar-title">Sviranje</span>
-            <div class="toolbar-controls">
-              <section class="control-group desktop-click-control" aria-label="Desktop klik mod">
-                <span class="control-label">Klik</span>
-                <div class="segmented compact" role="radiogroup" aria-label="Desktop klik mod">
-                  <label><input type="radio" name="desktopMouseMode" value="tone" checked><span>Ton</span></label>
-                  <label><input type="radio" name="desktopMouseMode" value="chord"><span>Akord</span></label>
-                </div>
-              </section>
-              <section class="control-group desktop-keyboard-control" aria-label="Tastatura kao klavir">
-                <label class="toggle-row"><input id="pianoKeyboardToggle" type="checkbox"><span>Tastatura: dugmetara</span></label>
-              </section>
-              <section class="control-group desktop-keyboard-control" aria-label="Broj redova dugmetare">
-                <span class="control-label">Redovi</span>
-                <div class="segmented compact" role="radiogroup" aria-label="Broj redova dugmetare">
-                  <label><input type="radio" name="dugmetaraRows" value="3"><span>3</span></label>
-                  <label><input type="radio" name="dugmetaraRows" value="4" checked><span>4</span></label>
-                </div>
-              </section>
-              <section class="control-group labels-control" aria-label="Nazivi tonova">
-                <label class="toggle-row"><input id="labelsToggle" type="checkbox" checked><span>Nazivi tonova</span></label>
-              </section>
-            </div>
-          </section>
-
-          <section class="toolbar-section chord-section" aria-label="Akordi">
-            <span class="toolbar-title">Akordi</span>
-            <div class="toolbar-controls">
-              <section class="control-group desktop-keyboard-control" aria-label="Polozaj sedmice i devetke">
-                <span class="control-label">7/9</span>
-                <div class="segmented compact" role="radiogroup" aria-label="Polozaj dodatnih tonova">
-                  <label><input type="radio" name="extensionVoicing" value="upper" checked><span>Gornja</span></label>
-                  <label><input type="radio" name="extensionVoicing" value="left"><span>Donja</span></label>
-                </div>
-              </section>
-              <section class="control-group desktop-keyboard-control" aria-label="Bliski hvatovi">
-                <label class="toggle-row"><input id="closeVoicingToggle" type="checkbox"><span>Bliski hvatovi</span></label>
-              </section>
-              <section class="control-group desktop-keyboard-control" aria-label="Sedmica i devetka bez osnove">
-                <label class="toggle-row"><input id="omitExtensionRootToggle" type="checkbox"><span>7/9 bez osnove</span></label>
-              </section>
-              <section class="control-group desktop-keyboard-control" aria-label="Ponovi akord na promenu">
-                <label class="toggle-row"><input id="retriggerChordToggle" type="checkbox" checked><span>Ponovi na promenu</span></label>
-              </section>
-              <section class="control-group desktop-keyboard-control double-tap-control" aria-label="Dupli pritisak za povisene akorde">
-                <label class="select-label" for="doubleTapSharpControl">Dupli Cis</label>
-                <input id="doubleTapSharpControl" class="mini-slider" type="range" min="30" max="250" step="10" value="90">
-                <output id="doubleTapSharpDisplay" class="mini-output">90ms</output>
-              </section>
-              <section class="control-group desktop-keyboard-control" aria-label="Reset memorije akorda">
-                <button id="resetMemoryButton" class="text-button" type="button">Reset memorije</button>
-              </section>
-            </div>
-          </section>
-        </div>
-      </section>
 
       <!-- ================= RADNI STO ================= -->
       <div class="work">
@@ -362,6 +248,84 @@
                 </div>
                 <span class="step-status" id="pipeReadSt"></span>
               </button>
+            </div>
+          </section>
+          <section class="panel piano-settings-panel" aria-label="Klavir i sviranje">
+            <div class="piano-settings-head">
+              <div>
+                <b>Klavir i sviranje</b>
+                <span id="midiSettingsStatus" class="midi-settings-status">MIDI nije povezana</span>
+              </div>
+              <span class="piano-settings-note">USB MIDI se povezuje klikom na dugme MIDI gore desno.</span>
+            </div>
+
+            <div class="piano-settings-grid">
+              <section class="piano-settings-group" aria-label="Zvuk klavira">
+                <span class="piano-settings-title">Zvuk</span>
+                <label class="compact-field volume-field">
+                  <span>Jacina</span>
+                  <input id="volumeControl" class="volume-slider" type="range" min="0" max="100" value="70" aria-label="Jacina zvuka">
+                </label>
+                <label class="compact-field">
+                  <span>Instrument</span>
+                  <select id="instrumentSelect" class="sound-select">
+                    <option value="grand-piano" selected>Grand piano</option>
+                    <option value="choir">Hor</option>
+                    <option value="warm-synth">Warm synth</option>
+                    <option value="accordion">Harmonika</option>
+                    <option value="organ">Organ</option>
+                    <option value="guitar">Gitara</option>
+                    <option value="trumpet">Truba</option>
+                    <option value="brass">Brass</option>
+                  </select>
+                </label>
+                <label class="toggle-row"><input id="sustainToggle" type="checkbox"><span>Sustain</span></label>
+                <label class="compact-field sustain-field">
+                  <span>Trajanje</span>
+                  <input id="sustainLengthControl" class="mini-slider" type="range" min="0.2" max="8.1" step="0.1" value="2.5">
+                  <output id="sustainLengthDisplay" class="mini-output">2.5s</output>
+                </label>
+              </section>
+
+              <section class="piano-settings-group" aria-label="Kontrole sviranja">
+                <span class="piano-settings-title">Sviranje</span>
+                <div class="compact-field inline-field">
+                  <span>Klik</span>
+                  <div class="segmented compact" role="radiogroup" aria-label="Desktop klik mod">
+                    <label><input type="radio" name="desktopMouseMode" value="tone" checked><span>Ton</span></label>
+                    <label><input type="radio" name="desktopMouseMode" value="chord"><span>Akord</span></label>
+                  </div>
+                </div>
+                <label class="toggle-row"><input id="pianoKeyboardToggle" type="checkbox"><span>Tastatura: dugmetara</span></label>
+                <div class="compact-field inline-field">
+                  <span>Redovi</span>
+                  <div class="segmented compact" role="radiogroup" aria-label="Broj redova dugmetare">
+                    <label><input type="radio" name="dugmetaraRows" value="3"><span>3</span></label>
+                    <label><input type="radio" name="dugmetaraRows" value="4" checked><span>4</span></label>
+                  </div>
+                </div>
+                <label class="toggle-row"><input id="labelsToggle" type="checkbox" checked><span>Nazivi tonova</span></label>
+              </section>
+
+              <section class="piano-settings-group" aria-label="Podesavanja akorda">
+                <span class="piano-settings-title">Akordi</span>
+                <div class="compact-field inline-field">
+                  <span>7/9</span>
+                  <div class="segmented compact" role="radiogroup" aria-label="Polozaj dodatnih tonova">
+                    <label><input type="radio" name="extensionVoicing" value="upper" checked><span>Gore</span></label>
+                    <label><input type="radio" name="extensionVoicing" value="left"><span>Dole</span></label>
+                  </div>
+                </div>
+                <label class="toggle-row"><input id="closeVoicingToggle" type="checkbox"><span>Bliski hvatovi</span></label>
+                <label class="toggle-row"><input id="omitExtensionRootToggle" type="checkbox"><span>7/9 bez osnove</span></label>
+                <label class="toggle-row"><input id="retriggerChordToggle" type="checkbox" checked><span>Ponovi na promenu</span></label>
+                <label class="compact-field sustain-field">
+                  <span>Dupli Cis</span>
+                  <input id="doubleTapSharpControl" class="mini-slider" type="range" min="30" max="250" step="10" value="90">
+                  <output id="doubleTapSharpDisplay" class="mini-output">90ms</output>
+                </label>
+                <button id="resetMemoryButton" class="text-button mini" type="button">Reset memorije</button>
+              </section>
             </div>
           </section>
         </div>

@@ -78,7 +78,7 @@ import {
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
 
-let app, keyboard, pianoScroll, volumeControl, octaveDown, octaveUp, octaveDisplay, labelsToggle;
+let app, keyboard, pianoScroll, midiBadge, volumeControl, octaveDown, octaveUp, octaveDisplay, labelsToggle;
 let instrumentSelect, sustainToggle, sustainLengthControl, sustainLengthDisplay, pianoKeyboardToggle;
 let omitExtensionRootToggle, closeVoicingToggle, retriggerChordToggle, resetMemoryButton;
 let doubleTapSharpControl, doubleTapSharpDisplay, activeChordDisplay, selectedSongTitle;
@@ -93,6 +93,7 @@ function cacheDom() {
   app = $("app");
   keyboard = $("keyboard");
   pianoScroll = $("pianoScroll");
+  midiBadge = $("midiBadge");
   volumeControl = $("volumeControl");
   octaveDown = $("octaveDown");
   octaveUp = $("octaveUp");
@@ -441,16 +442,9 @@ function bindEvents() {
   const themeToggle = $("themeToggle");
   if (themeToggle) themeToggle.addEventListener("click", toggleTheme);
 
-  const settingsToggle = $("settingsToggle");
-  const settingsPanel = $("settingsPanel");
-  if (settingsToggle && settingsPanel) {
-    settingsToggle.addEventListener("click", () => {
-      const show = settingsPanel.hidden;
-      settingsPanel.hidden = !show;
-      settingsToggle.setAttribute("aria-expanded", show ? "true" : "false");
-    });
+  if (midiBadge) {
+    midiBadge.addEventListener("click", () => connectMidi(false));
   }
-
   const sidebarToggle = $("sidebarToggle");
   const workArea = document.querySelector(".work");
   if (sidebarToggle && workArea) {
@@ -2349,7 +2343,7 @@ function renderMiniChart() {
   }
   
   if (!chords.length) {
-    wrap.innerHTML = '<div class="mini-empty">Još nema akorda za ovu pesmu.<br>Upiši ih u <b>Chord chart</b> alatu dok pesma svira, ili sačekaj automatsko prepoznavanje.</div>';
+    wrap.innerHTML = '<div class="mini-empty">Jos nema akorda za ovu pesmu.<br>Snimi pesmu ili dodaj akorde ovde.</div>';
     return;
   }
   wrap.innerHTML = "";
@@ -2377,49 +2371,86 @@ function renderMiniChart() {
 }
 
 let lastFollowedChord = null;
+let lastLearningScrollAt = 0;
+
+function getLivePlaybackTime() {
+  if (rec.playing || (state.practiceModeActive && rec.buffer)) {
+    return Math.max(0, Number(recTime()) || 0);
+  }
+
+  if (state.youtubePlayerReady && state.youtubePlayer && typeof state.youtubePlayer.getCurrentTime === "function") {
+    return Math.max(0, Number(state.youtubePlayer.getCurrentTime()) || 0);
+  }
+
+  return Math.max(0, Number(rec.offset) || 0);
+}
+
+function scrollLearningCellIntoView(cell, behavior = "smooth") {
+  if (!cell || typeof cell.scrollIntoView !== "function") return;
+  const now = Date.now();
+  if (behavior === "smooth" && now - lastLearningScrollAt < 450) return;
+  lastLearningScrollAt = now;
+  cell.scrollIntoView({ block: "nearest", inline: "nearest", behavior });
+}
+
+function syncLearningChartAtTime(time, options = {}) {
+  const t = Math.max(0, Number(time) || 0);
+  let currentName = null;
+  let activeCell = null;
+
+  ["miniChart", "ccStrip"].forEach((id) => {
+    const wrap = $(id);
+    if (!wrap) return;
+    const cells = [...wrap.querySelectorAll("[data-t]")];
+    if (!cells.length) return;
+
+    let current = null;
+    cells.forEach((cell) => {
+      if (Number(cell.dataset.t) <= t + 0.08) {
+        current = cell;
+      }
+    });
+
+    if (!current && options.allowBeforeFirst) {
+      current = cells[0];
+    }
+
+    cells.forEach((cell) => {
+      const isCurrent = cell === current;
+      cell.classList.toggle("now", isCurrent);
+      cell.classList.toggle("on", isCurrent);
+    });
+
+    if (current) {
+      currentName = (current.querySelector(".n") || current).textContent.trim();
+      if (id === "miniChart") activeCell = current;
+      if (id === "ccStrip" && !activeCell) activeCell = current;
+    }
+  });
+
+  if (activeCell && options.scroll !== false) {
+    scrollLearningCellIntoView(activeCell, options.force ? "auto" : "smooth");
+  }
+
+  return currentName;
+}
 
 function trackPlaybackAndHighlight() {
   const currentSong = getSelectedSong();
   if (!currentSong) return;
-  
-  const t = rec.playing 
-    ? recTime() 
-    : (state.youtubePlayerReady && typeof state.youtubePlayer.getCurrentTime === "function" 
-        ? Number(state.youtubePlayer.getCurrentTime()) || 0 
-        : 0);
-        
-  if (rec.playing) {
+
+  const t = getLivePlaybackTime();
+
+  if (rec.playing || rec.buffer) {
     updateRecRow();
   }
-  
-  if (!t) return;
-  let currentName = null;
-  
-  ["miniChart", "ccStrip"].forEach((id) => {
-    const wrap = $(id);
-    if (!wrap) return;
-    const cells = wrap.querySelectorAll("[data-t]");
-    let current = null;
-    
-    cells.forEach((cell) => {
-      if (Number(cell.dataset.t) <= t) {
-        current = cell;
-      }
-    });
-    
-    cells.forEach((cell) => {
-      cell.classList.toggle("now", cell === current);
-      cell.classList.toggle("on", cell === current);
-    });
-    
-    if (current) {
-      currentName = (current.querySelector(".n") || current).textContent.trim();
-      if (id === "ccStrip") {
-        current.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-      }
-    }
-  });
-  
+
+  const currentName = syncLearningChartAtTime(t, { allowBeforeFirst: state.practiceModeActive });
+
+  if (!currentName) {
+    lastFollowedChord = null;
+  }
+
   if (currentName && currentName !== lastFollowedChord) {
     lastFollowedChord = currentName;
     state.currentPlaybackChordName = currentName;
@@ -2436,7 +2467,6 @@ function trackPlaybackAndHighlight() {
     updatePracticeFollowHighlight(false);
   }
 }
-
 function focusLearningPanel() {
   const panel = document.querySelector(".rcol");
   if (panel && typeof panel.scrollIntoView === "function") {
@@ -2650,19 +2680,7 @@ function highlightPracticeChord() {
     renderTool();
   }
 
-  ["miniChart", "ccStrip"].forEach((id) => {
-    const wrap = $(id);
-    if (!wrap) return;
-    const cells = wrap.querySelectorAll("[data-t]");
-    cells.forEach((cell) => {
-      const match = Number(cell.dataset.t) === Number(chord.t);
-      cell.classList.toggle("now", match);
-      cell.classList.toggle("on", match);
-      if (match && id === "ccStrip") {
-        cell.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-      }
-    });
-  });
+  syncLearningChartAtTime(chord.t, { force: true });
 }
 
 function paintPracticeChord(name) {
