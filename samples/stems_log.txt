@@ -4,19 +4,16 @@ Scanning playlist: playlists/feelgood.json
 Downloading audio from https://www.youtube.com/watch?v=7wIwbe-F9eY...
 Running command: yt-dlp --impersonate chrome -x --audio-format mp3 -o temp_audio.mp3 https://www.youtube.com/watch?v=7wIwbe-F9eY
 yt-dlp stdout:
+[youtube] Extracting URL: https://www.youtube.com/watch?v=7wIwbe-F9eY
+[youtube] 7wIwbe-F9eY: Downloading webpage
+[youtube] 7wIwbe-F9eY: Downloading tv client config
+[youtube] 7wIwbe-F9eY: Downloading tv player API JSON
+[youtube] 7wIwbe-F9eY: Downloading web safari player API JSON
 
 yt-dlp stderr:
 Deprecated Feature: Support for Python version 3.9 has been deprecated. Please update to Python 3.10 or above
-Traceback (most recent call last):
-  File "/opt/hostedtoolcache/Python/3.9.25/x64/bin/yt-dlp", line 6, in <module>
-    sys.exit(main())
-  File "/opt/hostedtoolcache/Python/3.9.25/x64/lib/python3.9/site-packages/yt_dlp/__init__.py", line 1071, in main
-    _exit(*variadic(_real_main(argv)))
-  File "/opt/hostedtoolcache/Python/3.9.25/x64/lib/python3.9/site-packages/yt_dlp/__init__.py", line 968, in _real_main
-    with YoutubeDL(ydl_opts) as ydl:
-  File "/opt/hostedtoolcache/Python/3.9.25/x64/lib/python3.9/site-packages/yt_dlp/YoutubeDL.py", line 743, in __init__
-    raise YoutubeDLError(
-yt_dlp.utils.YoutubeDLError: Impersonate target "chrome" is not available. Use --list-impersonate-targets to see available targets. You may be missing dependencies required to support this target.
+WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
+ERROR: [youtube] 7wIwbe-F9eY: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
 
 Failed to download audio for mr6ab8n4-vnn9o3: yt-dlp exited with code 1
 Main processing finished.
