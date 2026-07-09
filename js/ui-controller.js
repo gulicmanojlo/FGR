@@ -2312,6 +2312,12 @@ function refreshPipe() {
   const id = recId();
   if (!id) { recSt.textContent = ""; return; }
   
+  if (song && song.stems === true) {
+    recSt.textContent = "✓ AI kanali";
+    recSt.classList.add("ok");
+    return;
+  }
+  
   dbGet(id).then((item) => {
     recSt.textContent = item ? "✓ " + fmtTime(item.dur) : "";
     recSt.classList.toggle("ok", !!item);
@@ -2495,26 +2501,47 @@ function updateRecRow() {
     return; 
   }
   
+  const song = getSelectedSong();
+  const hasStems = song && song.stems === true;
+  
+  if (hasStems) {
+    row.hidden = false;
+    const mix = $("recMixerPanel");
+    if (mix) mix.hidden = false;
+    
+    const recTimeDisplay = $("recTime");
+    if (recTimeDisplay) {
+      recTimeDisplay.textContent = fmtTime(recTime()) + (rec.buffer ? " / " + fmtTime(rec.buffer.duration) : "");
+    }
+    
+    const recPitchDisplay = $("recPitch");
+    if (recPitchDisplay) {
+      recPitchDisplay.textContent = state.transpose === 0 ? "" :
+        (state.transpose > 0 ? "+" + state.transpose : state.transpose);
+    }
+    return;
+  }
+  
   dbGet(id).then((item) => {
     row.hidden = !item;
     const mix = $("recMixerPanel");
     if (mix) mix.hidden = !item;
+    
+    const recTimeDisplay = $("recTime");
+    if (recTimeDisplay) {
+      recTimeDisplay.textContent = fmtTime(recTime()) + (rec.buffer ? " / " + fmtTime(rec.buffer.duration) : "");
+    }
+    
+    const recPitchDisplay = $("recPitch");
+    if (recPitchDisplay) {
+      recPitchDisplay.textContent = state.transpose === 0 ? "" :
+        (state.transpose > 0 ? "+" + state.transpose : state.transpose);
+    }
   }).catch(() => {
     row.hidden = true;
     const mix = $("recMixerPanel");
     if (mix) mix.hidden = true;
   });
-  
-  const recTimeDisplay = $("recTime");
-  if (recTimeDisplay) {
-    recTimeDisplay.textContent = fmtTime(recTime()) + (rec.buffer ? " / " + fmtTime(rec.buffer.duration) : "");
-  }
-  
-  const recPitchDisplay = $("recPitch");
-  if (recPitchDisplay) {
-    recPitchDisplay.textContent = state.transpose === 0 ? "" :
-      (state.transpose > 0 ? "+" + state.transpose : state.transpose) + " (" + (state.transpose > 0 ? "brže" : "sporije") + ")";
-  }
 }
 
 // ---------------- MINI CHART & HIGHLIGHT TRACKING ----------------
