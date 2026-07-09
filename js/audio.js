@@ -734,7 +734,7 @@ function dispatchPlayChange() {
 }
 
 // ---------------- PITCH SHIFTER (JUNGLE) ----------------
-export function createPitchShifter(context, pitchOffset) {
+export function createPitchShifter(context, pitchOffset, delayTime = 0.045) {
   const input = context.createGain();
   const output = context.createGain();
 
@@ -751,7 +751,7 @@ export function createPitchShifter(context, pitchOffset) {
   }
 
   const pitchRatio = Math.pow(2, pitchOffset / 12);
-  const delayTime = 0.100; // 100ms delay time for smoother instrumental pitch shifting
+  const delayWindow = clamp(Number(delayTime) || 0.045, 0.02, 0.12);
   
   const delay1 = context.createDelay(1.0);
   const delay2 = context.createDelay(1.0);
@@ -794,7 +794,7 @@ export function createPitchShifter(context, pitchOffset) {
   modSource.loop = true;
 
   const delayRate = 1 - pitchRatio;
-  const freq = Math.abs(delayRate) / delayTime;
+  const freq = Math.abs(delayRate) / delayWindow;
   modSource.playbackRate.value = freq * bufferLen;
 
   const splitter = context.createChannelSplitter(4);
@@ -805,14 +805,14 @@ export function createPitchShifter(context, pitchOffset) {
 
   if (delayRate < 0) {
     // Pitch up: downward ramp
-    rampScale1.gain.value = -delayTime;
-    rampScale2.gain.value = -delayTime;
-    delay1.delayTime.value = delayTime;
-    delay2.delayTime.value = delayTime;
+    rampScale1.gain.value = -delayWindow;
+    rampScale2.gain.value = -delayWindow;
+    delay1.delayTime.value = delayWindow;
+    delay2.delayTime.value = delayWindow;
   } else {
     // Pitch down: upward ramp
-    rampScale1.gain.value = delayTime;
-    rampScale2.gain.value = delayTime;
+    rampScale1.gain.value = delayWindow;
+    rampScale2.gain.value = delayWindow;
     delay1.delayTime.value = 0;
     delay2.delayTime.value = 0;
   }
@@ -855,6 +855,7 @@ export const rec = {
   gains: {
     bass: null,
     mid: null,
+    guitar: null,
     vocals: null,
     high: null
   },
@@ -864,7 +865,10 @@ export const rec = {
   hasStems: false,
   stems: null,
   sources: [],
-  pitchShifters: []
+  pitchShifters: [],
+  melodyAnalyser: null,
+  melodyData: null,
+  melodySourceName: ""
 };
 
 export function recRate() {
@@ -899,15 +903,18 @@ export function recStop(keepOffset) {
     try { rec.pitchShifter.disconnect(); } catch (e) {}
     rec.pitchShifter = null;
   }
+  resetMelodyAnalyser();
   if (rec.gains.bass) {
     try {
       rec.gains.bass.disconnect();
       rec.gains.mid.disconnect();
+      if (rec.gains.guitar) rec.gains.guitar.disconnect();
       if (rec.gains.vocals) rec.gains.vocals.disconnect();
       rec.gains.high.disconnect();
     } catch (e) {}
     rec.gains.bass = null;
     rec.gains.mid = null;
+    rec.gains.guitar = null;
     rec.gains.vocals = null;
     rec.gains.high = null;
   }
@@ -916,19 +923,18 @@ export function recStop(keepOffset) {
   }
   if (!keepOffset) rec.offset = 0;
   rec.playing = false;
-  
-  const recPlayBtn = document.getElementById("recPlayBtn");
-  if (recPlayBtn) recPlayBtn.textContent = "▶ Pusti snimak";
+  window.dispatchEvent(new CustomEvent("fgr:recupdate"));
 }
 
 export function updateMixerGains() {
-  if (!rec.gains.bass || !rec.gains.mid || !rec.gains.high) {
+  if (!rec.gains.bass || !rec.gains.mid || !rec.gains.guitar || !rec.gains.high) {
     return;
   }
 
-  const { bass, mid, vocals, high } = state.mixer;
+  const { bass, mid, guitar, vocals, high } = state.mixer;
+  const guitarState = guitar || { volume: 1.0, mute: false, solo: false };
   const vocalsState = vocals || { volume: 1.0, mute: false, solo: false };
-  const isAnySolo = bass.solo || mid.solo || vocalsState.solo || high.solo;
+  const isAnySolo = bass.solo || mid.solo || guitarState.solo || vocalsState.solo || high.solo;
 
   const calculateGain = (channelState) => {
     if (isAnySolo) {
@@ -940,16 +946,105 @@ export function updateMixerGains() {
   const now = rec.ctx ? rec.ctx.currentTime : 0;
   rec.gains.bass.gain.setTargetAtTime(calculateGain(bass), now, 0.015);
   rec.gains.mid.gain.setTargetAtTime(calculateGain(mid), now, 0.015);
+  rec.gains.guitar.gain.setTargetAtTime(calculateGain(guitarState), now, 0.015);
   if (rec.gains.vocals) {
     rec.gains.vocals.gain.setTargetAtTime(calculateGain(vocalsState), now, 0.015);
   }
   rec.gains.high.gain.setTargetAtTime(calculateGain(high), now, 0.015);
 }
 
+function resetMelodyAnalyser() {
+  if (rec.melodyAnalyser) {
+    try { rec.melodyAnalyser.disconnect(); } catch (e) {}
+  }
+  rec.melodyAnalyser = null;
+  rec.melodyData = null;
+  rec.melodySourceName = "";
+  state.activePitchAnalyser = null;
+}
+
+function attachMelodyAnalyser(sourceNode, sourceName) {
+  if (!state.trackMelody || !sourceNode || !rec.ctx) return;
+  if (sourceName !== "mix" && state.melodyTrackSource !== sourceName) return;
+
+  resetMelodyAnalyser();
+  const analyser = rec.ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.08;
+  sourceNode.connect(analyser);
+
+  rec.melodyAnalyser = analyser;
+  rec.melodyData = new Float32Array(analyser.fftSize);
+  rec.melodySourceName = sourceName;
+  state.activePitchAnalyser = analyser;
+}
+
+export function getMelodyPitch() {
+  if (!rec.melodyAnalyser || !rec.melodyData) return null;
+  rec.melodyAnalyser.getFloatTimeDomainData(rec.melodyData);
+  return autoCorrelatePitch(rec.melodyData, rec.ctx.sampleRate);
+}
+
+function autoCorrelatePitch(samples, sampleRate) {
+  let rms = 0;
+  for (let i = 0; i < samples.length; i += 1) {
+    rms += samples[i] * samples[i];
+  }
+  rms = Math.sqrt(rms / samples.length);
+  if (rms < 0.015) return null;
+
+  let start = 0;
+  let end = samples.length - 1;
+  const trimThreshold = 0.2;
+  for (let i = 0; i < samples.length / 2; i += 1) {
+    if (Math.abs(samples[i]) < trimThreshold) start = i;
+    else break;
+  }
+  for (let i = 1; i < samples.length / 2; i += 1) {
+    if (Math.abs(samples[samples.length - i]) < trimThreshold) end = samples.length - i;
+    else break;
+  }
+
+  const size = end - start;
+  if (size < 64) return null;
+
+  const correlations = new Array(size).fill(0);
+  for (let lag = 0; lag < size; lag += 1) {
+    for (let i = 0; i < size - lag; i += 1) {
+      correlations[lag] += samples[start + i] * samples[start + i + lag];
+    }
+  }
+
+  let lag = 1;
+  while (lag < size - 1 && correlations[lag] > correlations[lag + 1]) {
+    lag += 1;
+  }
+
+  let bestLag = -1;
+  let bestCorrelation = -Infinity;
+  for (; lag < size; lag += 1) {
+    if (correlations[lag] > bestCorrelation) {
+      bestCorrelation = correlations[lag];
+      bestLag = lag;
+    }
+  }
+
+  if (bestLag <= 0) return null;
+  const frequency = sampleRate / bestLag;
+  return frequency >= 65 && frequency <= 1200 ? frequency : null;
+}
+
+function getReferenceStemBuffer() {
+  if (!rec.stems) return null;
+  const buffers = Object.values(rec.stems).filter(Boolean);
+  if (!buffers.length) return null;
+  return buffers.reduce((best, buffer) => (!best || buffer.duration > best.duration ? buffer : best), null);
+}
+
 export function recPlayFrom(offset) {
   if (!rec.buffer) return;
   recStop(false);
-  rec.offset = Math.max(0, Math.min(offset, rec.buffer.duration - 0.1));
+  rec.offset = Math.max(0, Math.min(offset, Math.max(0, rec.buffer.duration - 0.1)));
   
   const speedSemitones = 12 * Math.log2(state.playbackRate);
   const shiftSemitones = state.transpose - speedSemitones;
@@ -957,12 +1052,14 @@ export function recPlayFrom(offset) {
   // Initialize gain nodes
   rec.gains.bass = rec.ctx.createGain();
   rec.gains.mid = rec.ctx.createGain();
+  rec.gains.guitar = rec.ctx.createGain();
   rec.gains.vocals = rec.ctx.createGain();
   rec.gains.high = rec.ctx.createGain();
 
   const dest = state.masterGain || rec.ctx.destination;
   rec.gains.bass.connect(dest);
   rec.gains.mid.connect(dest);
+  rec.gains.guitar.connect(dest);
   rec.gains.vocals.connect(dest);
   rec.gains.high.connect(dest);
 
@@ -971,10 +1068,12 @@ export function recPlayFrom(offset) {
 
   if (rec.hasStems && rec.stems) {
     const stemsToLoad = [
-      { name: "bass", destNode: rec.gains.bass, pitchShift: true },
-      { name: "vocals", destNode: rec.gains.vocals, pitchShift: true },
-      { name: "other", destNode: rec.gains.mid, pitchShift: true },
-      { name: "drums", destNode: rec.gains.high, pitchShift: false }
+      { name: "bass", destNode: rec.gains.bass, pitchShift: true, delayTime: 0.06 },
+      { name: "guitar", destNode: rec.gains.guitar, pitchShift: true, delayTime: 0.05 },
+      { name: "piano", destNode: rec.gains.mid, pitchShift: true, delayTime: 0.05 },
+      { name: "other", destNode: rec.gains.mid, pitchShift: true, delayTime: 0.05 },
+      { name: "vocals", destNode: rec.gains.vocals, pitchShift: true, delayTime: 0.035 },
+      { name: "drums", destNode: rec.gains.high, pitchShift: false, delayTime: 0.05 }
     ];
 
     stemsToLoad.forEach((stemInfo) => {
@@ -989,21 +1088,24 @@ export function recPlayFrom(offset) {
       let lastNode = source;
 
       if (stemInfo.pitchShift) {
-        const shifter = createPitchShifter(rec.ctx, shiftSemitones);
+        const shifter = createPitchShifter(rec.ctx, shiftSemitones, stemInfo.delayTime);
         rec.pitchShifters.push(shifter);
         lastNode.connect(shifter.input);
         lastNode = shifter.output;
       }
 
+      attachMelodyAnalyser(lastNode, stemInfo.name);
       lastNode.connect(stemInfo.destNode);
     });
+
+    if (!rec.sources.length) return;
 
     const playTime = rec.ctx.currentTime;
     rec.sources.forEach((source) => {
       source.start(playTime, rec.offset);
     });
 
-    const mainSource = rec.sources.find(s => s.buffer === rec.stems.other) || rec.sources[0];
+    const mainSource = rec.sources.find((source) => source.buffer === rec.stems.other) || rec.sources.find((source) => source.buffer === rec.stems.piano) || rec.sources[0];
     if (mainSource) {
       mainSource.onended = function () {
         if (rec.playing) recStop(false);
@@ -1015,7 +1117,7 @@ export function recPlayFrom(offset) {
     rec.source.buffer = rec.buffer;
     rec.source.playbackRate.value = state.playbackRate;
 
-    rec.pitchShifter = createPitchShifter(rec.ctx, shiftSemitones);
+    rec.pitchShifter = createPitchShifter(rec.ctx, shiftSemitones, 0.05);
 
     const bassFilter1 = rec.ctx.createBiquadFilter();
     bassFilter1.type = "lowpass";
@@ -1055,6 +1157,7 @@ export function recPlayFrom(offset) {
     rec.pitchShifter.output.connect(bassFilter1);
     rec.pitchShifter.output.connect(midHP1);
     rec.pitchShifter.output.connect(highFilter1);
+    attachMelodyAnalyser(rec.pitchShifter.output, "mix");
 
     bassFilter1.connect(bassFilter2);
     bassFilter2.connect(bassFilter3);
@@ -1080,9 +1183,7 @@ export function recPlayFrom(offset) {
   updateMixerGains();
   rec.startedAt = rec.ctx.currentTime;
   rec.playing = true;
-  
-  const recPlayBtn = document.getElementById("recPlayBtn");
-  if (recPlayBtn) recPlayBtn.textContent = "■ Pauza";
+  window.dispatchEvent(new CustomEvent("fgr:recupdate"));
 }
 
 // IndexedDB integrisano lokalno u audio
@@ -1174,33 +1275,40 @@ export function recLoad() {
   if (song.stems) {
     rec.hasStems = true;
     rec.stems = {};
-    const stemNames = ["bass", "vocals", "drums", "other"];
+    const stemNames = ["bass", "drums", "guitar", "piano", "vocals", "other"];
+    const requiredStems = new Set(["bass", "drums", "vocals", "other"]);
     const promises = stemNames.map((name) => {
       const url = `samples/${song.id}/${name}.mp3`;
       return fetch(url)
         .then((r) => {
-          if (!r.ok) throw new Error(`Failed to fetch stem: ${name}`);
+          if (!r.ok) {
+            if (requiredStems.has(name)) throw new Error(`Failed to fetch stem: ${name}`);
+            return null;
+          }
           return r.arrayBuffer();
         })
-        .then((data) => ctx.decodeAudioData(data))
+        .then((data) => data ? ctx.decodeAudioData(data) : null)
         .then((buffer) => {
-          rec.stems[name] = buffer;
+          if (buffer) rec.stems[name] = buffer;
         });
     });
 
     return Promise.all(promises)
       .then(() => {
-        rec.buffer = rec.stems.other;
+        rec.buffer = getReferenceStemBuffer();
+        if (!rec.buffer) throw new Error("No playable stems loaded");
         rec.bufferId = id;
         return true;
       })
       .catch((err) => {
         console.error("Error loading stems:", err);
         rec.hasStems = false;
+        rec.stems = null;
         return loadLegacyRecording(id);
       });
   } else {
     rec.hasStems = false;
+    rec.stems = null;
     return loadLegacyRecording(id);
   }
 }

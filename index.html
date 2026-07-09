@@ -37,7 +37,7 @@
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=96">
+    <link rel="stylesheet" href="styles.css?v=97">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="FGR aplikacija">
@@ -266,41 +266,76 @@
               <div class="rc-row"><span>Chord chart</span><span class="v" id="learnChartInfo">nema</span></div>
               <div class="learn-progress"><i id="learnProgressBar" style="width:0%"></i></div>
             </div>
-                <div id="recPlayerRow" class="rec-row" hidden>
-                  <span class="rec-lab">Na&#353; snimak</span>
-                  <button id="recPlayBtn" class="text-button mini" type="button">&#9654; Pusti snimak</button>
-                  <span class="rec-time" id="recTime">0:00</span>
-                  <span class="rec-pitch" id="recPitch"></span>
+                <div id="recPlayerRow" class="rec-row rec-hub" hidden>
+                  <div class="rec-hub-head">
+                    <span class="rec-lab">Nas snimak</span>
+                    <span class="rec-time" id="recTime">0:00 / 0:00</span>
+                    <span class="rec-pitch" id="recPitch"></span>
+                  </div>
+                  <input id="recSeeker" class="rec-seeker" type="range" min="0" max="0" step="0.05" value="0" aria-label="Pozicija snimka">
+                  <div class="rec-hub-controls">
+                    <label class="rec-select-field">
+                      <span>Brzina</span>
+                      <select id="recSpeedSelect" class="rec-speed-select" aria-label="Brzina snimka">
+                        <option value="0.5">0.5x</option>
+                        <option value="0.75">0.75x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                      </select>
+                    </label>
+                    <div class="side-trans" aria-label="Transpozicija snimka">
+                      <button id="sideTransDown" class="mixer-btn" type="button" aria-label="Nize">&minus;</button>
+                      <output id="sideTransVal" class="side-trans-val">&plusmn;0</output>
+                      <button id="sideTransUp" class="mixer-btn" type="button" aria-label="Vise">+</button>
+                    </div>
+                  </div>
                 </div>
                 <div id="recMixerPanel" class="rec-mixer-panel" hidden>
-                  <div class="mixer-title">Privremeni EQ miks snimka</div>
+                  <div class="mixer-title">AI stem mikser</div>
 
                   <div class="mixer-channel">
                     <span class="chan-label">Bas</span>
-                    <input id="mixBassVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Bass volume">
+                    <input id="mixBassVol" type="range" class="mixer-vol" min="0" max="200" value="100" aria-label="Bas volume">
                     <button id="mixBassMute" class="mixer-btn" type="button" title="Mute">M</button>
                     <button id="mixBassSolo" class="mixer-btn" type="button" title="Solo">S</button>
                   </div>
 
                   <div class="mixer-channel">
                     <span class="chan-label">Sredina</span>
-                    <input id="mixMidVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Melody volume">
+                    <input id="mixMidVol" type="range" class="mixer-vol" min="0" max="200" value="100" aria-label="Sredina volume">
                     <button id="mixMidMute" class="mixer-btn" type="button" title="Mute">M</button>
                     <button id="mixMidSolo" class="mixer-btn" type="button" title="Solo">S</button>
                   </div>
 
                   <div class="mixer-channel">
+                    <span class="chan-label">Gitara</span>
+                    <input id="mixGuitarVol" type="range" class="mixer-vol" min="0" max="200" value="100" aria-label="Gitara volume">
+                    <button id="mixGuitarMute" class="mixer-btn" type="button" title="Mute">M</button>
+                    <button id="mixGuitarSolo" class="mixer-btn" type="button" title="Solo">S</button>
+                  </div>
+
+                  <div class="mixer-channel">
                     <span class="chan-label">Vokal</span>
-                    <input id="mixVocalsVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Vocals volume">
+                    <input id="mixVocalsVol" type="range" class="mixer-vol" min="0" max="200" value="100" aria-label="Vokal volume">
                     <button id="mixVocalsMute" class="mixer-btn" type="button" title="Mute">M</button>
                     <button id="mixVocalsSolo" class="mixer-btn" type="button" title="Solo">S</button>
                   </div>
 
                   <div class="mixer-channel">
                     <span class="chan-label">Ritam</span>
-                    <input id="mixHighVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Rhythm volume">
+                    <input id="mixHighVol" type="range" class="mixer-vol" min="0" max="200" value="100" aria-label="Ritam volume">
                     <button id="mixHighMute" class="mixer-btn" type="button" title="Mute">M</button>
                     <button id="mixHighSolo" class="mixer-btn" type="button" title="Solo">S</button>
+                  </div>
+
+                  <div class="mixer-learning">
+                    <label class="toggle-row"><input id="showFingeringToggle" type="checkbox"><span>Prsti (1-5)</span></label>
+                    <label class="toggle-row"><input id="trackMelodyToggle" type="checkbox"><span>Prati melodiju</span></label>
+                    <select id="melodySourceSelect" class="rec-speed-select" aria-label="Izvor melodije">
+                      <option value="vocals" selected>Vokal</option>
+                      <option value="guitar">Gitara</option>
+                    </select>
                   </div>
                 </div>
             <div class="learn-actions">

@@ -1857,7 +1857,7 @@ a.feature-card:hover {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 255px minmax(0, 1fr) 240px;
+  grid-template-columns: 255px minmax(0, 1fr) 300px;
   gap: 9px;
   padding: 9px 10px;
   align-items: stretch;
@@ -2737,7 +2737,7 @@ a.feature-card:hover {
 
 .learn-progress > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #7fd695); transition: width 0.3s; }
 
-.mini-chart { display: grid; gap: 5px; flex: 1 1 120px; min-height: 0; align-content: start; overflow: auto; padding-right: 2px; overscroll-behavior: contain; }
+.mini-chart { display: grid; gap: 5px; flex: 1 1 250px; min-height: 250px; align-content: start; overflow: auto; padding-right: 2px; overscroll-behavior: contain; }
 
 .mini-cc { display: flex; justify-content: space-between; align-items: center; padding: 6px 9px; border: 1px solid var(--line-soft); border-radius: 7px; font-size: 11.5px; background: var(--panel-bg-2); cursor: pointer; }
 
@@ -3168,7 +3168,7 @@ a.feature-card:hover {
 }
 
 .mixer-btn.on-mute {
-  background: var(--rec);
+  background: var(--danger);
   color: #ffffff;
   border-color: transparent;
 }
@@ -3240,4 +3240,144 @@ a.feature-card:hover {
 .learn-actions,
 #practiceSongButton {
   flex: 0 0 auto;
+}
+
+/* ---- v97: recorded playback hub and learning overlays ---- */
+.rec-hub {
+  display: grid;
+  gap: 8px;
+  padding: 8px 0 2px;
+}
+
+.rec-hub-head,
+.rec-hub-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rec-hub-head .rec-time {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.rec-seeker {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.rec-seeker::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.rec-seeker::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1px solid var(--accent-deep);
+  box-shadow: var(--shadow-sm);
+}
+
+.rec-select-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.rec-speed-select {
+  min-height: 28px;
+  min-width: 74px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-bg);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 750;
+  padding: 0 7px;
+}
+
+.side-trans {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.side-trans-val {
+  min-width: 32px;
+  text-align: center;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--accent-strong);
+}
+
+.mixer-learning {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.mixer-learning .toggle-row {
+  min-height: 28px;
+  font-size: 11.5px;
+}
+
+.mixer-learning .rec-speed-select {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.fingering-badge {
+  position: absolute;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  min-width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #f7fbff;
+  color: #06456b;
+  border: 1px solid #33a8ff;
+  font-size: 10px;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.key.black .fingering-badge {
+  bottom: 22px;
+  background: #e9f7ff;
+  color: #00478f;
+}
+
+.key.white.melody-hint {
+  box-shadow: 0 0 0 3px rgba(62, 211, 141, 0.4), inset 0 -8px 12px rgba(6, 105, 69, 0.14) !important;
+  border-color: #3ed38d !important;
+}
+
+.key.black.melody-hint {
+  box-shadow: 0 0 0 3px rgba(62, 211, 141, 0.38), 0 0 18px rgba(62, 211, 141, 0.32) !important;
+  border-color: #3ed38d !important;
+}
+
+@media (min-width: 1181px) and (max-width: 1280px) {
+  .work { grid-template-columns: 245px minmax(0, 1fr) 280px; }
 }

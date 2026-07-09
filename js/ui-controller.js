@@ -25,6 +25,7 @@ import {
   recSeek,
   recRetune,
   updateMixerGains,
+  getMelodyPitch,
   dbGet,
   dbPut,
   dbGetAll,
@@ -87,6 +88,8 @@ let playlistStart, playlistWorkspace, startLoadPlaylistButton, startNewPlaylistB
 let loadPlaylistButton, newPlaylistButton, playlistDialog, playlistDialogTitle, playlistDialogClose, playlistBrowser;
 let songTitleInput, songKeyInput, songUrlInput, addSongButton, songSearchInput, songSearchButton;
 let mobileModifierButtons;
+let recSeeker, recSpeedSelect, sideTransDown, sideTransUp, sideTransVal;
+let showFingeringToggle, trackMelodyToggle, melodySourceSelect;
 let abA = null, abB = null, abTimer = null;
 
 // New elements for context menu, selection mode, and edit dialog
@@ -140,6 +143,14 @@ function cacheDom() {
   songSearchInput = $("songSearchInput");
   songSearchButton = $("songSearchButton");
   mobileModifierButtons = [...document.querySelectorAll("[data-mobile-modifier]")];
+  recSeeker = $("recSeeker");
+  recSpeedSelect = $("recSpeedSelect");
+  sideTransDown = $("sideTransDown");
+  sideTransUp = $("sideTransUp");
+  sideTransVal = $("sideTransVal");
+  showFingeringToggle = $("showFingeringToggle");
+  trackMelodyToggle = $("trackMelodyToggle");
+  melodySourceSelect = $("melodySourceSelect");
 
   songContextMenu = $("songContextMenu");
   ctxSelectSong = $("ctxSelectSong");
@@ -640,7 +651,7 @@ function bindEvents() {
   });
 
   window.addEventListener("fgr:recupdate", () => {
-    updateRecRow();
+    updateRecordedPlaybackControls();
   });
 
   // Dodavanje, izmena i brisanje akorada u chartu preko dogadjaja
@@ -709,7 +720,7 @@ function bindEvents() {
     recPlayBtn.addEventListener("click", () => {
       if (rec.playing) {
         recStop(true);
-        updateRecRow();
+        updateRecordedPlaybackControls();
       } else {
         recLoad().then((ok) => {
           if (!ok) {
@@ -718,7 +729,7 @@ function bindEvents() {
           }
           if (rec.ctx.state === "suspended") rec.ctx.resume();
           recPlayFrom(rec.offset);
-          updateRecRow();
+          updateRecordedPlaybackControls();
         });
       }
     });
@@ -761,6 +772,69 @@ function bindEvents() {
     recRetune();
   }
 
+  const updateSideTransDisplay = () => {
+    if (sideTransVal) {
+      sideTransVal.textContent = state.transpose > 0 ? "+" + state.transpose : (state.transpose < 0 ? String(state.transpose) : "+/-0");
+    }
+  };
+
+  const changeSideTranspose = (delta) => {
+    state.transpose = clamp(state.transpose + delta, -11, 11);
+    afterTranspose();
+    updateSideTransDisplay();
+  };
+
+  if (sideTransUp) sideTransUp.addEventListener("click", () => changeSideTranspose(1));
+  if (sideTransDown) sideTransDown.addEventListener("click", () => changeSideTranspose(-1));
+
+  if (recSpeedSelect) {
+    recSpeedSelect.value = String(state.playbackRate);
+    recSpeedSelect.addEventListener("change", () => {
+      state.playbackRate = Number(recSpeedSelect.value) || 1;
+      recRetune();
+      updateRecordedPlaybackControls();
+    });
+  }
+
+  if (recSeeker) {
+    recSeeker.addEventListener("input", () => {
+      const t = Math.max(0, Number(recSeeker.value) || 0);
+      if (!rec.playing) {
+        rec.offset = t;
+        window.dispatchEvent(new CustomEvent("fgr:recupdate"));
+      }
+      syncLearningChartAtTime(t, { scroll: false, allowBeforeFirst: state.practiceModeActive });
+    });
+    recSeeker.addEventListener("change", () => {
+      recSeek(Math.max(0, Number(recSeeker.value) || 0));
+    });
+  }
+
+  if (showFingeringToggle) {
+    showFingeringToggle.checked = state.showFingering;
+    showFingeringToggle.addEventListener("change", () => {
+      state.showFingering = showFingeringToggle.checked;
+      if (state.practiceModeActive) highlightPracticeChord();
+    });
+  }
+
+  if (trackMelodyToggle) {
+    trackMelodyToggle.checked = state.trackMelody;
+    trackMelodyToggle.addEventListener("change", () => {
+      state.trackMelody = trackMelodyToggle.checked;
+      if (!state.trackMelody) setMelodyHintMidi(null);
+      else if (rec.playing) recRetune();
+    });
+  }
+
+  if (melodySourceSelect) {
+    melodySourceSelect.value = state.melodyTrackSource;
+    melodySourceSelect.addEventListener("change", () => {
+      state.melodyTrackSource = melodySourceSelect.value === "guitar" ? "guitar" : "vocals";
+      setMelodyHintMidi(null);
+      if (rec.playing && state.trackMelody) recRetune();
+    });
+  }
   bindMixerEvents();
 
   const learnAddChord = $("learnAddChord");
@@ -775,13 +849,17 @@ function bindEvents() {
     practiceSongButton.addEventListener("click", togglePracticeMode);
   }
 
-  // Periodicni tajmer za pracenje pesme i bojenje akorda na klavijaturi
-  window.setInterval(trackPlaybackAndHighlight, 600);
+  // Render loop za pracenje pesme i bojenje akorda na klavijaturi
+  function animLoop() {
+    trackPlaybackAndHighlight();
+    requestAnimationFrame(animLoop);
+  }
+  requestAnimationFrame(animLoop);
 }
 
 function bindMixerEvents() {
-  const channels = ["Bass", "Mid", "Vocals", "High"];
-  const keys = { Bass: "bass", Mid: "mid", Vocals: "vocals", High: "high" };
+  const channels = ["Bass", "Mid", "Guitar", "Vocals", "High"];
+  const keys = { Bass: "bass", Mid: "mid", Guitar: "guitar", Vocals: "vocals", High: "high" };
 
   channels.forEach((chan) => {
     const volInput = $(`mix${chan}Vol`);
@@ -1852,7 +1930,7 @@ function seekRecordedSongTo(value, options = {}) {
       recPlayFrom(target);
     } else {
       rec.offset = target;
-      updateRecRow();
+      updateRecordedPlaybackControls();
       window.dispatchEvent(new CustomEvent("fgr:recupdate"));
     }
 
@@ -2443,6 +2521,39 @@ function stopCapture() {
   }
 }
 
+function loadStemForChordAnalysis(actx, songId, stemName, required = false) {
+  return fetch(`samples/${songId}/${stemName}.mp3`)
+    .then((r) => {
+      if (!r.ok) {
+        if (required) throw new Error(`Ne mogu da preuzmem AI stem: ${stemName}.`);
+        return null;
+      }
+      return r.arrayBuffer();
+    })
+    .then((data) => data ? actx.decodeAudioData(data) : null);
+}
+
+function mixAnalysisBuffers(actx, buffers) {
+  const valid = buffers.filter(Boolean);
+  if (!valid.length) throw new Error("Nema harmonijskih stemova za analizu.");
+
+  const length = Math.max(...valid.map((buffer) => buffer.length));
+  const channels = Math.max(...valid.map((buffer) => buffer.numberOfChannels));
+  const mixed = actx.createBuffer(channels, length, valid[0].sampleRate);
+  const scale = 1 / valid.length;
+
+  valid.forEach((buffer) => {
+    for (let channel = 0; channel < channels; channel += 1) {
+      const output = mixed.getChannelData(channel);
+      const input = buffer.getChannelData(Math.min(channel, buffer.numberOfChannels - 1));
+      for (let i = 0; i < input.length; i += 1) {
+        output[i] += input[i] * scale;
+      }
+    }
+  });
+
+  return mixed;
+}
 // Offline analiza buffer-a za automatsko prepoznavanje akorda
 function runOfflineChordAnalysis() {
   const song = getSelectedSong();
@@ -2454,18 +2565,16 @@ function runOfflineChordAnalysis() {
   const hasStems = song && song.stems === true;
   
   if (hasStems) {
-    setPipeStatus("Analiziram AI instrumental… (može potrajati)");
+    setPipeStatus("Analiziram AI harmoniju... (moze potrajati)");
     const actx = new (window.AudioContext || window.webkitAudioContext)();
-    const url = `samples/${song.id}/other.mp3`;
     
-    fetch(url)
-      .then((r) => {
-        if (!r.ok) throw new Error("Ne mogu da preuzmem AI instrumental.");
-        return r.arrayBuffer();
-      })
-      .then((data) => actx.decodeAudioData(data))
+    Promise.all([
+      loadStemForChordAnalysis(actx, song.id, "piano", false),
+      loadStemForChordAnalysis(actx, song.id, "other", true)
+    ])
+      .then((buffers) => mixAnalysisBuffers(actx, buffers))
       .then((buffer) => window.FGRAnalyzeBuffer(buffer, (p) => {
-        setPipeStatus("Analiziram… " + Math.round(p * 100) + "%");
+        setPipeStatus("Analiziram... " + Math.round(p * 100) + "%");
       }))
       .then((chords) => {
         actx.close().catch(() => {});
@@ -2474,7 +2583,7 @@ function runOfflineChordAnalysis() {
           return;
         }
         
-        if (song.chords && song.chords.length && !confirm("Pesma već ima " + song.chords.length + " akorada u chartu. Da ih zamenim sa " + chords.length + " prepoznatih?")) {
+        if (song.chords && song.chords.length && !confirm("Pesma vec ima " + song.chords.length + " akorada u chartu. Da ih zamenim sa " + chords.length + " prepoznatih?")) {
           setPipeStatus("");
           return;
         }
@@ -2488,7 +2597,8 @@ function runOfflineChordAnalysis() {
         setPipeStatus("Upisano " + chords.length + " akorada u chart. Proveri ih i ispravi po sluhu.");
       })
       .catch((err) => {
-        setPipeStatus("Greška: " + err.message);
+        actx.close().catch(() => {});
+        setPipeStatus("Greska: " + err.message);
       });
     return;
   }
@@ -2533,6 +2643,38 @@ function runOfflineChordAnalysis() {
   });
 }
 
+function updateRecordedPlaybackControls() {
+  const duration = rec.buffer ? rec.buffer.duration : 0;
+  const current = duration ? Math.min(recTime(), duration) : Math.max(0, recTime());
+
+  const recTimeDisplay = $("recTime");
+  if (recTimeDisplay) {
+    recTimeDisplay.textContent = duration ? `${fmtTime(current)} / ${fmtTime(duration)}` : fmtTime(current);
+  }
+
+  const recPitchDisplay = $("recPitch");
+  if (recPitchDisplay) {
+    recPitchDisplay.textContent = state.transpose === 0 ? "" : (state.transpose > 0 ? "+" + state.transpose : String(state.transpose));
+  }
+
+  if (sideTransVal) {
+    sideTransVal.textContent = state.transpose > 0 ? "+" + state.transpose : (state.transpose < 0 ? String(state.transpose) : "+/-0");
+  }
+
+  if (recSpeedSelect && recSpeedSelect.value !== String(state.playbackRate)) {
+    recSpeedSelect.value = String(state.playbackRate);
+  }
+
+  if (recSeeker) {
+    recSeeker.max = duration ? String(duration) : "0";
+    recSeeker.disabled = !duration;
+    if (document.activeElement !== recSeeker) {
+      recSeeker.value = String(current);
+    }
+  }
+
+  updatePracticeButtonLabel();
+}
 function updateRecRow() {
   const row = $("recPlayerRow");
   if (!row) return;
@@ -2552,16 +2694,7 @@ function updateRecRow() {
     const mix = $("recMixerPanel");
     if (mix) mix.hidden = false;
     
-    const recTimeDisplay = $("recTime");
-    if (recTimeDisplay) {
-      recTimeDisplay.textContent = fmtTime(recTime()) + (rec.buffer ? " / " + fmtTime(rec.buffer.duration) : "");
-    }
-    
-    const recPitchDisplay = $("recPitch");
-    if (recPitchDisplay) {
-      recPitchDisplay.textContent = state.transpose === 0 ? "" :
-        (state.transpose > 0 ? "+" + state.transpose : state.transpose);
-    }
+    updateRecordedPlaybackControls();
     return;
   }
   
@@ -2570,16 +2703,7 @@ function updateRecRow() {
     const mix = $("recMixerPanel");
     if (mix) mix.hidden = !item;
     
-    const recTimeDisplay = $("recTime");
-    if (recTimeDisplay) {
-      recTimeDisplay.textContent = fmtTime(recTime()) + (rec.buffer ? " / " + fmtTime(rec.buffer.duration) : "");
-    }
-    
-    const recPitchDisplay = $("recPitch");
-    if (recPitchDisplay) {
-      recPitchDisplay.textContent = state.transpose === 0 ? "" :
-        (state.transpose > 0 ? "+" + state.transpose : state.transpose);
-    }
+    updateRecordedPlaybackControls();
   }).catch(() => {
     row.hidden = true;
     const mix = $("recMixerPanel");
@@ -2634,6 +2758,54 @@ function renderMiniChart() {
 
 let lastFollowedChord = null;
 let lastLearningScrollAt = 0;
+let lastMelodyMidi = null;
+
+function setMelodyHintMidi(midi) {
+  if (midi === lastMelodyMidi) return;
+  if (lastMelodyMidi !== null) {
+    const previous = state.keyElementsByMidi.get(lastMelodyMidi);
+    if (previous) previous.classList.remove("melody-hint");
+  }
+  lastMelodyMidi = midi;
+  if (midi !== null) {
+    const next = state.keyElementsByMidi.get(midi);
+    if (next) next.classList.add("melody-hint");
+  }
+}
+
+function updateMelodyTracking() {
+  if (!state.trackMelody || !rec.playing) {
+    setMelodyHintMidi(null);
+    return;
+  }
+  const frequency = getMelodyPitch();
+  if (!frequency) {
+    setMelodyHintMidi(null);
+    return;
+  }
+  const midi = Math.round(69 + 12 * Math.log2(frequency / 440));
+  setMelodyHintMidi(findKeyboardMidiForMelody(midi));
+}
+
+function findKeyboardMidiForMelody(midi) {
+  if (state.keyElementsByMidi.has(midi)) return midi;
+  const pc = ((midi % 12) + 12) % 12;
+  const preferred = noteToMidi(pc, state.baseOctave);
+  if (state.keyElementsByMidi.has(preferred)) return preferred;
+
+  let best = null;
+  let bestDistance = Infinity;
+  state.keyElementsByMidi.forEach((element, keyMidi) => {
+    if (((keyMidi % 12) + 12) % 12 !== pc) return;
+    const distance = Math.abs(keyMidi - preferred);
+    if (distance < bestDistance) {
+      best = keyMidi;
+      bestDistance = distance;
+    }
+  });
+  return best;
+}
+
 
 function getLivePlaybackTime() {
   if (rec.playing || (state.practiceModeActive && rec.buffer)) {
@@ -2704,8 +2876,9 @@ function trackPlaybackAndHighlight() {
   const t = getLivePlaybackTime();
 
   if (rec.playing || rec.buffer) {
-    updateRecRow();
+    updateRecordedPlaybackControls();
   }
+  updateMelodyTracking();
 
   const currentName = syncLearningChartAtTime(t, { allowBeforeFirst: state.practiceModeActive });
 
@@ -2833,9 +3006,33 @@ window.FGRBridge = {
 init();
 
 // ---------------- INTERAKTIVNI MOD ZA VEZBANJE PESME ----------------
+function startRecordedPlaybackOnly() {
+  recLoad().then((ok) => {
+    if (!ok) {
+      setPipeStatus("Nema naseg snimka za ovu pesmu.");
+      return;
+    }
+    if (rec.ctx.state === "suspended") rec.ctx.resume();
+    if (state.youtubePlayer && typeof state.youtubePlayer.pauseVideo === "function") {
+      state.youtubePlayer.pauseVideo();
+    }
+    recPlayFrom(rec.offset || 0);
+    updateRecRow();
+    setPipeStatus("Pustam nas snimak. Dodaj/prepoznaj akorde za vodjeno vezbanje.");
+  }).catch((err) => {
+    setPipeStatus("Greska: " + err.message);
+  });
+}
 function togglePracticeMode() {
   if (state.practiceModeActive) {
     stopPracticeMode();
+    return;
+  }
+
+  if (rec.playing) {
+    recStop(true);
+    updateRecordedPlaybackControls();
+    setPipeStatus("");
     return;
   }
 
@@ -2846,7 +3043,7 @@ function togglePracticeMode() {
   }
 
   if (!song.chords || !song.chords.length) {
-    alert("Ova pesma nema akorda u chartu. Snimi pesmu i pokreni 'Prepoznaj akorde' ili dodaj akorde rucno!");
+    startRecordedPlaybackOnly();
     return;
   }
 
@@ -2881,7 +3078,7 @@ function stopPracticeMode(options = {}) {
   const pauseRecording = options.pauseRecording !== false;
   if (pauseRecording && state.practiceFollowPlayback && rec.playing) {
     recStop(true);
-    updateRecRow();
+    updateRecordedPlaybackControls();
   }
 
   state.practiceModeActive = false;
@@ -2890,15 +3087,26 @@ function stopPracticeMode(options = {}) {
   state.practiceCurrentIndex = -1;
 
   setPracticeButtonActive(false);
-  state.keyElementsByMidi.forEach((el) => el.classList.remove("practice-hint"));
+  clearPracticeHints();
   setPipeStatus("");
 }
 
 function setPracticeButtonActive(active) {
   const btn = $("practiceSongButton");
   if (!btn) return;
-  btn.textContent = active ? "\u25A0 Zaustavi vezbanje" : "\u25B6 Vezbaj ovu pesmu";
   btn.classList.toggle("practice-active", active);
+  updatePracticeButtonLabel();
+}
+
+function updatePracticeButtonLabel() {
+  const btn = $("practiceSongButton");
+  if (!btn) return;
+  if (state.practiceModeActive || rec.playing) {
+    btn.textContent = "\u25A0 Zaustavi";
+  } else {
+    btn.textContent = "\u25B6 Vezbaj ovu pesmu";
+  }
+  btn.classList.toggle("practice-active", state.practiceModeActive || rec.playing);
 }
 
 function updatePracticeFollowHighlight(force) {
@@ -2945,21 +3153,51 @@ function highlightPracticeChord() {
   syncLearningChartAtTime(chord.t, { force: true });
 }
 
+function clearPracticeHints() {
+  state.keyElementsByMidi.forEach((el) => {
+    el.classList.remove("practice-hint");
+    el.querySelectorAll(".fingering-badge").forEach((badge) => badge.remove());
+  });
+}
+
 function paintPracticeChord(name) {
-  state.keyElementsByMidi.forEach((el) => el.classList.remove("practice-hint"));
+  clearPracticeHints();
 
   const parsed = parseChordName(name);
   if (!parsed) return;
 
-  const targetPcs = parsed.ivs.map((iv) => (parsed.pc + iv) % 12);
+  const targetMidis = [...new Set(parsed.ivs.map((iv) => noteToMidi((parsed.pc + iv) % 12, state.baseOctave)))]
+    .filter((midi) => state.keyElementsByMidi.has(midi))
+    .sort((a, b) => a - b);
 
-  state.keyElementsByMidi.forEach((el, midi) => {
-    const pc = ((midi % 12) + 12) % 12;
-    const octave = Math.floor(midi / 12) - 1;
-    if (targetPcs.includes(pc) && (octave === state.baseOctave || octave === state.baseOctave + 1)) {
-      el.classList.add("practice-hint");
-    }
+  targetMidis.forEach((midi) => {
+    const el = state.keyElementsByMidi.get(midi);
+    if (el) el.classList.add("practice-hint");
   });
+
+  if (state.showFingering) {
+    addFingeringBadges(targetMidis);
+  }
+}
+
+function addFingeringBadges(midis) {
+  const fingers = getFingeringPattern(midis.length);
+  midis.forEach((midi, index) => {
+    const key = state.keyElementsByMidi.get(midi);
+    if (!key) return;
+    const badge = document.createElement("span");
+    badge.className = "fingering-badge";
+    badge.textContent = String(fingers[index] || Math.min(index + 1, 5));
+    key.append(badge);
+  });
+}
+
+function getFingeringPattern(count) {
+  if (count <= 1) return [1];
+  if (count === 2) return [1, 5];
+  if (count === 3) return [1, 3, 5];
+  if (count === 4) return [1, 2, 3, 5];
+  return [1, 2, 3, 4, 5].slice(0, count);
 }
 
 function checkPracticeChord() {
