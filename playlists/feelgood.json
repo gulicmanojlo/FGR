@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "FeelGood",
-  "updatedAt": "2026-07-09T15:37:38.625Z",
+  "updatedAt": "2026-07-09T15:43:59.008Z",
   "settings": {
     "selectedSongId": "luis-sve-se-osim-tuge-deli",
     "seekSeconds": 1
@@ -13,7 +13,7 @@
       "key": "Amol",
       "url": "",
       "videoId": "",
-      "stems": false,
+      "stems": true,
       "chords": [
         {
           "t": 4.8,
