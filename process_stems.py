@@ -32,10 +32,10 @@ def process_song(song):
         os.remove(temp_mp3)
         
     try:
-        # Forcing ios and web_embedded player clients to bypass datacenter blocks
+        # Using --impersonate chrome to bypass bot verification challenges
         cmd = [
             "yt-dlp",
-            "--extractor-args", "youtube:player_client=ios,web_embedded",
+            "--impersonate", "chrome",
             "-x",
             "--audio-format",
             "mp3",
