@@ -3,7 +3,7 @@ import subprocess
 import json
 import shutil
 
-REPERTOIRE_PATH = "playlists/repertoire.json"
+PLAYLISTS_DIR = "playlists"
 
 def process_song(song):
     song_id = song.get("id")
@@ -90,32 +90,37 @@ def process_song(song):
     return True
 
 def main():
-    if not os.path.exists(REPERTOIRE_PATH):
-        print(f"Repertoire file not found: {REPERTOIRE_PATH}")
+    if not os.path.exists(PLAYLISTS_DIR):
+        print(f"Playlists directory not found: {PLAYLISTS_DIR}")
         return
 
-    with open(REPERTOIRE_PATH, "r", encoding="utf-8") as f:
-        try:
-            repertoire = json.load(f)
-        except Exception as e:
-            print(f"Failed to parse repertoire JSON: {e}")
-            return
+    playlist_files = [f for f in os.listdir(PLAYLISTS_DIR) if f.endswith(".json")]
+    
+    for filename in playlist_files:
+        filepath = os.path.join(PLAYLISTS_DIR, filename)
+        print(f"Scanning playlist: {filepath}")
+        
+        with open(filepath, "r", encoding="utf-8") as f:
+            try:
+                playlist = json.load(f)
+            except Exception as e:
+                print(f"Failed to parse playlist JSON {filepath}: {e}")
+                continue
 
-    modified = False
-    for song in repertoire:
-        # Process if 'stems' flag is not True
-        if not song.get("stems"):
-            success = process_song(song)
-            if success:
-                song["stems"] = True
-                modified = True
+        songs = playlist.get("songs", [])
+        modified = False
+        for song in songs:
+            # Process if 'stems' flag is not True
+            if not song.get("stems"):
+                success = process_song(song)
+                if success:
+                    song["stems"] = True
+                    modified = True
 
-    if modified:
-        print("Saving updated repertoire file...")
-        with open(REPERTOIRE_PATH, "w", encoding="utf-8") as f:
-            json.dump(repertoire, f, ensure_ascii=False, indent=2)
-    else:
-        print("No new songs to process.")
+        if modified:
+            print(f"Saving updated playlist: {filepath}")
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(playlist, f, ensure_ascii=False, indent=2)
 
 if __name__ == "__main__":
     main()
