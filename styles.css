@@ -2882,3 +2882,24 @@ a.feature-card:hover {
   color: #ffffff !important;
   font-weight: 700;
 }
+
+/* ---- v95: ucenje pesme kao centralni practice panel ---- */
+.rcol .rec-row {
+  padding: 8px 0 2px;
+}
+
+.rcol .rec-mixer-panel {
+  margin-top: 6px;
+}
+
+.learn-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.circle-shell {
+  text-align: center;
+  padding: 14px 0 4px;
+}

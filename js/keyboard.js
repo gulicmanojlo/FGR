@@ -520,6 +520,14 @@ function latchChordColorForCurrentChord(chordColor) {
   }
 }
 
+function clearLatchedChordColorsIfNoChordRoot() {
+  if (state.heldBaseKeys.size || state.heldMouseChordRoots.size) {
+    return;
+  }
+  state.keyboardChordColorLatched.seven = false;
+  state.keyboardChordColorLatched.nine = false;
+}
+
 function holdKeyboardChordBriefly(chord) {
   clearKeyboardReleaseGuard();
   state.keyboardFrozenChord = chord;
@@ -641,6 +649,7 @@ function releaseKeyboardBaseKey(code) {
   }
 
   state.heldBaseKeys.delete(code);
+  clearLatchedChordColorsIfNoChordRoot();
 }
 
 function rememberKeyboardBaseKeyRelease(code) {

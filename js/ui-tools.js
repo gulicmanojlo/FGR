@@ -871,11 +871,12 @@ export const TOOLS = {
     });
   },
   
-  // Krug kvinti (dodat u Fazi 4)
+  // Krug kvinti
   krug: function() {
     const toolBody = document.getElementById("toolBody");
-    toolBody.innerHTML = '<div class="scale-head"><b>Vizuelni krug kvinti i kvarti</b><span class="tool-note" style="margin:0 0 0 auto">Transpozicija se vrši na + / - tasterima tonaliteta</span></div>' +
-      '<div style="text-align:center;padding:20px 0;"><div id="circleContainer" style="max-width:320px;margin:0 auto;"></div></div>';
+    const live = state.currentPlaybackChordName ? "Live: " + state.currentPlaybackChordName : "Live: nema akorda";
+    toolBody.innerHTML = '<div class="scale-head"><b>Krug kvinti</b><span class="tool-note" style="margin:0 0 0 auto">' + live + '</span></div>' +
+      '<div class="circle-shell"><div id="circleContainer" style="max-width:340px;margin:0 auto;"></div></div>';
     renderCircleOfFifths();
   }
 };
@@ -937,84 +938,87 @@ window.playCircleChord = function(pc, quality) {
   paintMidis(midis, label, { autoClear: true, holdMs: 1000 });
 };
 
+function chordQualityFromName(name) {
+  var m = String(name || "").trim().match(/^(Cis|Dis|Fis|Gis|C|D|E|F|G|A|B|H)(.*)$/);
+  if (!m) return "major";
+  var suffix = m[2].split("/")[0].trim();
+  return suffix.indexOf("m") === 0 && suffix.indexOf("maj") !== 0 ? "minor" : "major";
+}
+
 function renderCircleOfFifths() {
   const container = document.getElementById("circleContainer");
   if (!container) return;
-  
-  const currentKey = shownKey(); // pc i minor
+
+  const currentKey = shownKey();
   const circleMajor = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
-  
-  const idx = circleMajor.indexOf(currentKey.minor ? (currentKey.pc + 3) % 12 : currentKey.pc);
-  const relatedIndices = [
-    idx,
-    (idx - 1 + 12) % 12,
-    (idx + 1) % 12
-  ];
-  
-  let html = `<svg viewBox="0 0 300 300" width="100%" height="100%">
+  const liveChord = parseChordName(state.currentPlaybackChordName || "");
+  const liveQuality = chordQualityFromName(state.currentPlaybackChordName || "");
+  const livePc = liveChord ? liveChord.pc : null;
+  const keyMajorPc = currentKey.minor ? (currentKey.pc + 3) % 12 : currentKey.pc;
+  const keyMinorPc = currentKey.minor ? currentKey.pc : (currentKey.pc + 9) % 12;
+
+  let html = `<svg viewBox="0 0 300 300" width="100%" height="100%" aria-label="Krug kvinti">
     <circle cx="150" cy="150" r="142" fill="none" stroke="var(--line)" stroke-width="1" />
     <circle cx="150" cy="150" r="110" fill="none" stroke="var(--line)" stroke-width="1" />
-    <circle cx="150" cy="150" r="78" fill="none" stroke="var(--line)" stroke-width="1" />`;
-    
+    <circle cx="150" cy="150" r="78" fill="none" stroke="var(--line)" stroke-width="1" />
+    <text x="150" y="144" text-anchor="middle" font-size="10" font-weight="800" fill="var(--muted)">TONALITET</text>
+    <text x="150" y="160" text-anchor="middle" font-size="15" font-weight="900" fill="var(--ink)">${formatKey(currentKey.pc, currentKey.minor)}</text>`;
+
   for (let i = 0; i < 12; i++) {
     const angle = (i * 30 - 90) * Math.PI / 180;
     const xMajor = 150 + 126 * Math.cos(angle);
     const yMajor = 150 + 126 * Math.sin(angle);
     const pcMajor = circleMajor[i];
-    
+
     const pcMinor = (pcMajor + 9) % 12;
     const xMinor = 150 + 94 * Math.cos(angle);
     const yMinor = 150 + 94 * Math.sin(angle);
-    
-    const isMajorActive = !currentKey.minor && currentKey.pc === pcMajor;
-    const isMinorActive = currentKey.minor && currentKey.pc === pcMinor;
-    
-    const isMajorRelated = relatedIndices.includes(i);
-    const isMinorRelated = relatedIndices.includes(i);
-    
+
+    const isKeyMajor = pcMajor === keyMajorPc;
+    const isKeyMinor = pcMinor === keyMinorPc;
+    const isLiveMajor = livePc === pcMajor && liveQuality === "major";
+    const isLiveMinor = livePc === pcMinor && liveQuality === "minor";
+
     let fillMajor = "transparent";
     let strokeMajor = "var(--line)";
     let textMajorColor = "var(--ink-2)";
-    if (isMajorActive) {
+    if (isLiveMajor) {
+      fillMajor = "#2f9bff";
+      strokeMajor = "#2f9bff";
+      textMajorColor = "#ffffff";
+    } else if (isKeyMajor) {
       fillMajor = "var(--accent)";
       strokeMajor = "var(--accent)";
       textMajorColor = "var(--accent-contrast)";
-    } else if (isMajorRelated) {
-      fillMajor = "var(--accent-soft)";
-      strokeMajor = "color-mix(in srgb, var(--accent) 55%, transparent)";
-      textMajorColor = "var(--accent-strong)";
     }
-    
+
     let fillMinor = "transparent";
     let strokeMinor = "var(--line)";
     let textMinorColor = "var(--muted)";
-    if (isMinorActive) {
-      fillMinor = "var(--accent)";
-      strokeMinor = "var(--accent)";
-      textMinorColor = "var(--accent-contrast)";
-    } else if (isMinorRelated) {
+    if (isLiveMinor) {
+      fillMinor = "#2f9bff";
+      strokeMinor = "#2f9bff";
+      textMinorColor = "#ffffff";
+    } else if (isKeyMinor) {
       fillMinor = "var(--accent-soft)";
       strokeMinor = "color-mix(in srgb, var(--accent) 55%, transparent)";
       textMinorColor = "var(--accent-strong)";
     }
-    
-    // Spoljasnji (dur) segmenti (klikabilna grupa)
+
     html += `<g class="circle-chord-btn" onclick="window.playCircleChord(${pcMajor}, 'major')">
       <circle cx="${xMajor}" cy="${yMajor}" r="14" fill="${fillMajor}" stroke="${strokeMajor}" stroke-width="1.5" />
       <text x="${xMajor}" y="${yMajor + 4}" font-size="11" font-weight="800" text-anchor="middle" fill="${textMajorColor}">${NOTE_NAMES[pcMajor]}</text>
     </g>`;
-      
-    // Unutrasnji (mol) segmenti (klikabilna grupa)
+
     html += `<g class="circle-chord-btn" onclick="window.playCircleChord(${pcMinor}, 'minor')">
       <circle cx="${xMinor}" cy="${yMinor}" r="12" fill="${fillMinor}" stroke="${strokeMinor}" stroke-width="1.5" />
       <text x="${xMinor}" y="${yMinor + 4}" font-size="9" font-weight="700" text-anchor="middle" fill="${textMinorColor}">${NOTE_NAMES[pcMinor].toLowerCase()}m</text>
     </g>`;
   }
-  
+
   html += `</svg>`;
   container.innerHTML = html;
 }
-
 // ---------------- POMOCNE ZA KEY PICKER ----------------
 function keyPickerHTML(idPrefix) {
   return '<label>Tonalitet <select id="' + idPrefix + 'Root"></select></label>' +

@@ -170,10 +170,18 @@ export const state = {
   youtubePauseRetryTimers: [],
   youtubeCommandToken: 0,
   youtubeResumeTime: 0,
+  currentPlaybackChordName: "",
+  currentPlaybackChordTime: 0,
   
   // Transposition
   transpose: 0,
   playbackRate: 1.0,
+
+  // Practice playback
+  practiceModeActive: false,
+  practiceFollowPlayback: false,
+  practiceSongChords: null,
+  practiceCurrentIndex: -1,
   
   // Mixer
   mixer: {

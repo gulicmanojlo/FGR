@@ -611,7 +611,7 @@ function bindEvents() {
 
   const pipeReadBtn = $("pipeRead");
   if (pipeReadBtn) {
-    pipeReadBtn.addEventListener("click", () => selectTool("chart"));
+    pipeReadBtn.addEventListener("click", focusLearningPanel);
   }
 
   // Lokalni snimak plejer dugme
@@ -673,6 +673,13 @@ function bindEvents() {
   }
 
   bindMixerEvents();
+
+  const learnAddChord = $("learnAddChord");
+  if (learnAddChord) {
+    learnAddChord.addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent("fgr:addchordrequest"));
+    });
+  }
 
   const practiceSongButton = $("practiceSongButton");
   if (practiceSongButton) {
@@ -1594,6 +1601,15 @@ function handleYouTubeShortcut(event) {
     return true;
   }
 
+  if (event.code === "Backquote" && isLeftShiftPracticeShortcut(event)) {
+    if (event.altKey) {
+      seekPracticeRecordingToStart();
+    } else {
+      togglePracticeMode();
+    }
+    return true;
+  }
+
   if (event.code === "Backquote") {
     if (event.altKey) {
       seekYouTubeToStart();
@@ -1601,12 +1617,66 @@ function handleYouTubeShortcut(event) {
       triggerSelectedSongToggle();
     }
   } else if (event.code === "Digit1") {
-    seekYouTube(-getYouTubeSeekSeconds());
+    if (shouldControlRecordedSong()) seekPracticeRecording(-getYouTubeSeekSeconds());
+    else seekYouTube(-getYouTubeSeekSeconds());
   } else if (event.code === "Digit2") {
-    seekYouTube(getYouTubeSeekSeconds());
+    if (shouldControlRecordedSong()) seekPracticeRecording(getYouTubeSeekSeconds());
+    else seekYouTube(getYouTubeSeekSeconds());
   }
 
   return true;
+}
+
+function isLeftShiftPracticeShortcut(event) {
+  return Boolean(event.shiftKey && state.keyboardInversions?.right?.has("ShiftLeft"));
+}
+
+function shouldControlRecordedSong() {
+  return Boolean(state.practiceModeActive || rec.playing);
+}
+
+function seekPracticeRecordingToStart() {
+  seekRecordedSongTo(0, { startIfActive: state.practiceModeActive || rec.playing, status: "Pocetak vezbe" });
+}
+
+function seekPracticeRecording(deltaSeconds) {
+  seekRecordedSongTo(deltaSeconds, { relative: true, startIfActive: rec.playing, status: `${deltaSeconds < 0 ? "Nazad" : "Napred"} ${Math.abs(deltaSeconds)}s` });
+}
+
+function seekRecordedSongTo(value, options = {}) {
+  const song = getSelectedSong();
+  if (!song) {
+    setPipeStatus("Prvo izaberi pesmu.");
+    return;
+  }
+
+  recLoad().then((ok) => {
+    if (!ok) {
+      setPipeStatus("Nema naseg snimka za ovu pesmu.");
+      return;
+    }
+    if (rec.ctx.state === "suspended") rec.ctx.resume();
+    const duration = rec.buffer ? rec.buffer.duration : 0;
+    const current = rec.playing ? recTime() : rec.offset;
+    const target = options.relative
+      ? clamp(current + value, 0, Math.max(0, duration - 0.1))
+      : clamp(value, 0, Math.max(0, duration - 0.1));
+
+    if (rec.playing || options.startIfActive) {
+      recPlayFrom(target);
+    } else {
+      rec.offset = target;
+      updateRecRow();
+      window.dispatchEvent(new CustomEvent("fgr:recupdate"));
+    }
+
+    if (state.practiceModeActive) {
+      updatePracticeFollowHighlight(true);
+    }
+    setPipeStatus(options.status || "Snimak pomeren");
+  }).catch((err) => {
+    setPipeStatus("Greska: " + err.message);
+  });
 }
 
 function seekYouTubeToStart() {
@@ -2077,7 +2147,13 @@ function startCapture() {
   
   navigator.mediaDevices.getDisplayMedia({
     video: true,
-    audio: true,
+    audio: {
+      channelCount: 2,
+      sampleRate: 48000,
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false
+    },
     preferCurrentTab: true,
     selfBrowserSurface: "include"
   }).then((stream) => {
@@ -2088,9 +2164,20 @@ function startCapture() {
     }
     
     capStream = stream;
-    const audioStream = new MediaStream([stream.getAudioTracks()[0]]);
+    const audioTrack = stream.getAudioTracks()[0];
+    if (typeof audioTrack.applyConstraints === "function") {
+      audioTrack.applyConstraints({
+        channelCount: 2,
+        sampleRate: 48000,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }).catch(() => {});
+    }
+    const audioStream = new MediaStream([audioTrack]);
     const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
-    capRec = new MediaRecorder(audioStream, { mimeType: mime });
+    const recOptions = mime ? { mimeType: mime, audioBitsPerSecond: 256000 } : { audioBitsPerSecond: 256000 };
+    capRec = new MediaRecorder(audioStream, recOptions);
     capChunks = [];
     
     capRec.ondataavailable = (e) => {
@@ -2279,6 +2366,12 @@ function renderMiniChart() {
       }
       paintChordName(transposeChordName(chord.n), false);
     });
+    item.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      if (confirm("Obrisi " + chord.n + " (" + fmtTime(chord.t) + ")?")) {
+        window.dispatchEvent(new CustomEvent("fgr:removechordrequest", { detail: { index: idx } }));
+      }
+    });
     wrap.appendChild(item);
   });
 }
@@ -2327,11 +2420,29 @@ function trackPlaybackAndHighlight() {
     }
   });
   
-  // Auto-bojenje akorda na virtuelnom klaviru
-  if (currentName && currentName !== lastFollowedChord && state.tool !== "skale" && state.tool !== "vezba") {
+  if (currentName && currentName !== lastFollowedChord) {
     lastFollowedChord = currentName;
-    paintChordName(currentName, true);
+    state.currentPlaybackChordName = currentName;
+    state.currentPlaybackChordTime = t;
+    if (state.tool === "krug") {
+      renderTool();
+    }
+    if (!state.practiceModeActive && state.tool !== "skale" && state.tool !== "vezba") {
+      paintChordName(currentName, true);
+    }
   }
+
+  if (state.practiceModeActive && state.practiceFollowPlayback) {
+    updatePracticeFollowHighlight(false);
+  }
+}
+
+function focusLearningPanel() {
+  const panel = document.querySelector(".rcol");
+  if (panel && typeof panel.scrollIntoView === "function") {
+    panel.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }
+  setPipeStatus("Chord chart je u panelu Ucenje ove pesme.");
 }
 
 // ---------------- POMOCNI PWA SERVISI ----------------
@@ -2429,88 +2540,122 @@ window.FGRBridge = {
 // Pokretanje
 init();
 
-// ---------------- INTERAKTIVNI MOD ZA VEŽBANJE PESME ----------------
+// ---------------- INTERAKTIVNI MOD ZA VEZBANJE PESME ----------------
 function togglePracticeMode() {
+  if (state.practiceModeActive) {
+    stopPracticeMode();
+    return;
+  }
+
   const song = getSelectedSong();
   if (!song) {
     alert("Prvo izaberi pesmu u listi!");
     return;
   }
-  
+
   if (!song.chords || !song.chords.length) {
-    alert("Ova pesma nema akorda u chartu. Snimi pesmu i pokreni 'Prepoznaj akorde' ili dodaj akorde ručno!");
+    alert("Ova pesma nema akorda u chartu. Snimi pesmu i pokreni 'Prepoznaj akorde' ili dodaj akorde rucno!");
     return;
   }
 
-  state.practiceModeActive = !state.practiceModeActive;
-  
-  const btn = $("practiceSongButton");
-  if (state.practiceModeActive) {
-    state.practiceSongChords = [...song.chords];
-    
-    // Zaustavi reprodukciju zvuka
-    if (rec.playing) recStop(true);
-    else if (state.youtubePlayer && typeof state.youtubePlayer.pauseVideo === "function") {
+  recLoad().then((ok) => {
+    if (!ok) {
+      setPipeStatus("Nema naseg snimka za ovu pesmu. Prvo uradi 'Snimi jednom'.");
+      return;
+    }
+
+    if (rec.ctx.state === "suspended") rec.ctx.resume();
+    if (state.youtubePlayer && typeof state.youtubePlayer.pauseVideo === "function") {
       state.youtubePlayer.pauseVideo();
     }
-    
-    // Nadji trenutni indeks akorda prema vremenu
-    const t = rec.playing ? recTime() : (state.youtubePlayerReady && typeof state.youtubePlayer.getCurrentTime === "function" ? Number(state.youtubePlayer.getCurrentTime()) || 0 : 0);
-    let index = 0;
-    for (let i = 0; i < state.practiceSongChords.length; i++) {
-      if (state.practiceSongChords[i].t <= t) {
-        index = i;
-      }
-    }
+
+    state.practiceModeActive = true;
+    state.practiceFollowPlayback = true;
+    state.practiceSongChords = [...song.chords];
+    state.practiceCurrentIndex = -1;
+
+    setPracticeButtonActive(true);
+    const startAt = rec.offset > 0 && rec.buffer && rec.offset < rec.buffer.duration - 0.25 ? rec.offset : 0;
+    recPlayFrom(startAt);
+    updateRecRow();
+    setPipeStatus("Vezba ide iz naseg snimka. Plavi akord prati chart po vremenu.");
+    updatePracticeFollowHighlight(true);
+  }).catch((err) => {
+    setPipeStatus("Greska: " + err.message);
+  });
+}
+
+function stopPracticeMode(options = {}) {
+  const pauseRecording = options.pauseRecording !== false;
+  if (pauseRecording && state.practiceFollowPlayback && rec.playing) {
+    recStop(true);
+    updateRecRow();
+  }
+
+  state.practiceModeActive = false;
+  state.practiceFollowPlayback = false;
+  state.practiceSongChords = null;
+  state.practiceCurrentIndex = -1;
+
+  setPracticeButtonActive(false);
+  state.keyElementsByMidi.forEach((el) => el.classList.remove("practice-hint"));
+  setPipeStatus("");
+}
+
+function setPracticeButtonActive(active) {
+  const btn = $("practiceSongButton");
+  if (!btn) return;
+  btn.textContent = active ? "\u25A0 Zaustavi vezbanje" : "\u25B6 Vezbaj ovu pesmu";
+  btn.classList.toggle("practice-active", active);
+}
+
+function updatePracticeFollowHighlight(force) {
+  if (!state.practiceModeActive || !state.practiceFollowPlayback || !state.practiceSongChords) return;
+  const t = rec.playing ? recTime() : rec.offset;
+  const index = getPracticeChordIndexAtTime(t);
+  if (index !== state.practiceCurrentIndex || force) {
     state.practiceCurrentIndex = index;
-    
-    if (btn) {
-      btn.innerHTML = "■ Zaustavi vežbanje";
-      btn.classList.add("practice-active");
-    }
-    
-    setPipeStatus("Režim vežbanja aktivan. Odsviraj akord označen plavom bojom na klaviru.");
     highlightPracticeChord();
-  } else {
-    stopPracticeMode();
   }
 }
 
-function stopPracticeMode() {
-  state.practiceModeActive = false;
-  state.practiceSongChords = null;
-  state.practiceCurrentIndex = -1;
-  
-  const btn = $("practiceSongButton");
-  if (btn) {
-    btn.innerHTML = "▶ Vežbaj ovu pesmu";
-    btn.classList.remove("practice-active");
+function getPracticeChordIndexAtTime(time) {
+  let index = -1;
+  for (let i = 0; i < state.practiceSongChords.length; i++) {
+    if (Number(state.practiceSongChords[i].t) <= time + 0.08) {
+      index = i;
+    }
   }
-  
-  // Ocisti oznake sa tastature
-  state.keyElementsByMidi.forEach(el => el.classList.remove("practice-hint"));
-  setPipeStatus("");
+  return index < 0 ? 0 : index;
 }
 
 function highlightPracticeChord() {
   if (!state.practiceModeActive || !state.practiceSongChords) return;
   const chord = state.practiceSongChords[state.practiceCurrentIndex];
   if (!chord) {
-    playSuccessBeep();
-    alert("Čestitamo! Uspešno ste uvežbali pesmu!");
-    stopPracticeMode();
+    if (!state.practiceFollowPlayback) {
+      playSuccessBeep();
+      alert("Cestitamo! Uvezbali ste pesmu!");
+      stopPracticeMode();
+    }
     return;
   }
-  
-  setPipeStatus(`Vežba: Odsviraj akord <b>${transposeChordName(chord.n)}</b> (na ${fmtTime(chord.t)})`);
-  paintPracticeChord(transposeChordName(chord.n));
-  
+
+  const shownName = transposeChordName(chord.n);
+  state.currentPlaybackChordName = shownName;
+  state.currentPlaybackChordTime = Number(chord.t) || 0;
+  setPipeStatus("Vezba: " + shownName + " na " + fmtTime(chord.t));
+  paintPracticeChord(shownName);
+  if (state.tool === "krug") {
+    renderTool();
+  }
+
   ["miniChart", "ccStrip"].forEach((id) => {
     const wrap = $(id);
     if (!wrap) return;
     const cells = wrap.querySelectorAll("[data-t]");
     cells.forEach((cell) => {
-      const match = Number(cell.dataset.t) === chord.t;
+      const match = Number(cell.dataset.t) === Number(chord.t);
       cell.classList.toggle("now", match);
       cell.classList.toggle("on", match);
       if (match && id === "ccStrip") {
@@ -2521,13 +2666,13 @@ function highlightPracticeChord() {
 }
 
 function paintPracticeChord(name) {
-  state.keyElementsByMidi.forEach(el => el.classList.remove("practice-hint"));
-  
+  state.keyElementsByMidi.forEach((el) => el.classList.remove("practice-hint"));
+
   const parsed = parseChordName(name);
   if (!parsed) return;
-  
-  const targetPcs = parsed.ivs.map(iv => (parsed.pc + iv) % 12);
-  
+
+  const targetPcs = parsed.ivs.map((iv) => (parsed.pc + iv) % 12);
+
   state.keyElementsByMidi.forEach((el, midi) => {
     const pc = ((midi % 12) + 12) % 12;
     const octave = Math.floor(midi / 12) - 1;
@@ -2538,24 +2683,25 @@ function paintPracticeChord(name) {
 }
 
 function checkPracticeChord() {
+  if (state.practiceFollowPlayback) return;
   if (!state.practiceModeActive || !state.practiceSongChords) return;
   const chord = state.practiceSongChords[state.practiceCurrentIndex];
   if (!chord) return;
-  
+
   const parsed = parseChordName(transposeChordName(chord.n));
   if (!parsed) return;
-  
-  const targetPcs = parsed.ivs.map(iv => (parsed.pc + iv) % 12);
-  
+
+  const targetPcs = parsed.ivs.map((iv) => (parsed.pc + iv) % 12);
+
   const activePcs = new Set();
-  midiHeld.forEach(m => activePcs.add(((m % 12) + 12) % 12));
-  state.activeMidiSet.forEach(m => activePcs.add(((m % 12) + 12) % 12));
-  
-  const isMatch = targetPcs.every(pc => activePcs.has(pc)) && activePcs.size === targetPcs.length;
+  midiHeld.forEach((m) => activePcs.add(((m % 12) + 12) % 12));
+  state.activeMidiSet.forEach((m) => activePcs.add(((m % 12) + 12) % 12));
+
+  const isMatch = targetPcs.every((pc) => activePcs.has(pc)) && activePcs.size === targetPcs.length;
   if (isMatch) {
     playSuccessBeep();
     state.practiceCurrentIndex++;
-    
+
     const nextChord = state.practiceSongChords[state.practiceCurrentIndex];
     if (nextChord) {
       if (rec.playing) recSeek(nextChord.t);
@@ -2563,13 +2709,12 @@ function checkPracticeChord() {
         state.youtubePlayer.seekTo(nextChord.t, true);
       }
     }
-    
+
     setTimeout(() => {
       highlightPracticeChord();
     }, 450);
   }
 }
-
 function playSuccessBeep() {
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   if (!state.audioContext) {

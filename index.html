@@ -37,7 +37,7 @@
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=86">
+    <link rel="stylesheet" href="styles.css?v=95">
   </head>
   <body>
     <main id="app" class="app-shell" tabindex="0" aria-label="FGR aplikacija">
@@ -236,36 +236,6 @@
                   <button id="abLoopButton" class="text-button mini" type="button" title="Ponavljaj deo pesme u krug">A–B</button>
                   <button id="youtubeOpenExternal" class="text-button mini" type="button">Otvori</button>
                 </div>
-                <div id="recPlayerRow" class="rec-row" hidden>
-                  <span class="rec-lab">Na&#353; snimak</span>
-                  <button id="recPlayBtn" class="text-button mini" type="button">&#9654; Pusti snimak</button>
-                  <span class="rec-time" id="recTime">0:00</span>
-                  <span class="rec-pitch" id="recPitch"></span>
-                </div>
-                <div id="recMixerPanel" class="rec-mixer-panel" hidden>
-                  <div class="mixer-title">Frekvencijski mikser kanala</div>
-                  
-                  <div class="mixer-channel">
-                    <span class="chan-label">Bas</span>
-                    <input id="mixBassVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Bass volume">
-                    <button id="mixBassMute" class="mixer-btn" type="button" title="Mute">M</button>
-                    <button id="mixBassSolo" class="mixer-btn" type="button" title="Solo">S</button>
-                  </div>
-                  
-                  <div class="mixer-channel">
-                    <span class="chan-label">Melodija</span>
-                    <input id="mixMidVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Melody volume">
-                    <button id="mixMidMute" class="mixer-btn" type="button" title="Mute">M</button>
-                    <button id="mixMidSolo" class="mixer-btn" type="button" title="Solo">S</button>
-                  </div>
-                  
-                  <div class="mixer-channel">
-                    <span class="chan-label">Ritam</span>
-                    <input id="mixHighVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Rhythm volume">
-                    <button id="mixHighMute" class="mixer-btn" type="button" title="Mute">M</button>
-                    <button id="mixHighSolo" class="mixer-btn" type="button" title="Solo">S</button>
-                  </div>
-                </div>
                 <label class="seek-field">
                   <span>Premotaj</span>
                   <input id="youtubeSeekSeconds" class="sheet-input seek-input" type="number" min="1" max="60" step="1" value="10" aria-label="Sekunde premotavanja">
@@ -303,7 +273,6 @@
                 <button class="chip" type="button" data-m="skale">Skale</button>
                 <button class="chip" type="button" data-m="krug">Krug kvinti</button>
                 <button class="chip" type="button" data-m="vezba">Vezba</button>
-                <button class="chip" type="button" data-m="chart">Chord chart</button>
               </div>
               <section class="control-group octave-control tool-octave" aria-label="Izbor oktave">
                 <button id="octaveDown" class="text-button mini" type="button">Oktava -</button>
@@ -363,11 +332,11 @@
 
               <div class="pipeline-connector"></div>
 
-              <button class="pipe-step" type="button" disabled title="Razdvajanje vokala, ritma i basa pomoću AI modela (uskoro)">
+              <button class="pipe-step" type="button" disabled title="Pravo AI razdvajanje stemova je sledeca faza">
                 <span class="step-num">2</span>
                 <div class="step-info">
-                  <span class="step-title">Razdvoji kanale</span>
-                  <span class="step-desc">AI filteri (Bass/Mid/High)</span>
+                  <span class="step-title">AI stemovi</span>
+                  <span class="step-desc">Demucs/UVR plan</span>
                 </div>
                 <span class="step-status">uskoro</span>
               </button>
@@ -385,11 +354,11 @@
 
               <div class="pipeline-connector"></div>
 
-              <button id="pipeRead" class="pipe-step" type="button" title="Otvori chord chart ove pesme">
+              <button id="pipeRead" class="pipe-step" type="button" title="Prikazi chart u panelu Ucenje ove pesme">
                 <span class="step-num">4</span>
                 <div class="step-info">
-                  <span class="step-title">Čitaj iz memorije</span>
-                  <span class="step-desc">Pregled i korekcija akorda</span>
+                  <span class="step-title">Chart u ucenju</span>
+                  <span class="step-desc">Pregled i dodavanje</span>
                 </div>
                 <span class="step-status" id="pipeReadSt"></span>
               </button>
@@ -405,7 +374,40 @@
               <div class="rc-row"><span>Chord chart</span><span class="v" id="learnChartInfo">nema</span></div>
               <div class="learn-progress"><i id="learnProgressBar" style="width:0%"></i></div>
             </div>
-            <div class="mini-chart" id="miniChart"><div class="mini-empty">Jos nema akorda za ovu pesmu.<br>Uradi korake „Skidanja" ili ih upisi rucno u Chord chart alatu.</div></div>
+                <div id="recPlayerRow" class="rec-row" hidden>
+                  <span class="rec-lab">Na&#353; snimak</span>
+                  <button id="recPlayBtn" class="text-button mini" type="button">&#9654; Pusti snimak</button>
+                  <span class="rec-time" id="recTime">0:00</span>
+                  <span class="rec-pitch" id="recPitch"></span>
+                </div>
+                <div id="recMixerPanel" class="rec-mixer-panel" hidden>
+                  <div class="mixer-title">Privremeni EQ miks snimka</div>
+
+                  <div class="mixer-channel">
+                    <span class="chan-label">Bas</span>
+                    <input id="mixBassVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Bass volume">
+                    <button id="mixBassMute" class="mixer-btn" type="button" title="Mute">M</button>
+                    <button id="mixBassSolo" class="mixer-btn" type="button" title="Solo">S</button>
+                  </div>
+
+                  <div class="mixer-channel">
+                    <span class="chan-label">Sredina</span>
+                    <input id="mixMidVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Melody volume">
+                    <button id="mixMidMute" class="mixer-btn" type="button" title="Mute">M</button>
+                    <button id="mixMidSolo" class="mixer-btn" type="button" title="Solo">S</button>
+                  </div>
+
+                  <div class="mixer-channel">
+                    <span class="chan-label">Ritam</span>
+                    <input id="mixHighVol" type="range" class="mixer-vol" min="0" max="100" value="100" aria-label="Rhythm volume">
+                    <button id="mixHighMute" class="mixer-btn" type="button" title="Mute">M</button>
+                    <button id="mixHighSolo" class="mixer-btn" type="button" title="Solo">S</button>
+                  </div>
+                </div>
+            <div class="learn-actions">
+              <button id="learnAddChord" class="text-button mini" type="button">+ Akord</button>
+            </div>
+            <div class="mini-chart" id="miniChart"><div class="mini-empty">Jos nema akorda za ovu pesmu.<br>Snimi pesmu ili dodaj akorde ovde.</div></div>
             <button id="practiceSongButton" class="text-button primary-button" type="button">&#9654; Vezbaj ovu pesmu</button>
           </div>
         </aside>

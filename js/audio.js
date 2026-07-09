@@ -1152,7 +1152,14 @@ AN_TEMPLATES.forEach((tpl) => {
   for (let r = 0; r < 12; r++) {
     const vec = new Array(12).fill(0);
     tpl[1].forEach((iv) => { vec[(r + iv) % 12] = 1; });
-    AN_VECS.push({ name: NOTE_NAMES[r] + tpl[0], vec, norm: Math.sqrt(tpl[1].length) });
+    AN_VECS.push({
+      name: NOTE_NAMES[r] + tpl[0],
+      root: r,
+      suffix: tpl[0],
+      intervals: tpl[1],
+      vec,
+      norm: Math.sqrt(tpl[1].length)
+    });
   }
 });
 
@@ -1194,26 +1201,50 @@ function bestChord(chroma) {
   const len = Math.sqrt(norm.reduce((s, v) => s + v * v, 0)) || 1;
   let best = null;
   let bestScore = -1;
-  
+  const scored = [];
+
   AN_VECS.forEach((c) => {
     let dot = 0;
     for (let i = 0; i < 12; i++) {
       dot += norm[i] * c.vec[i];
     }
     let score = dot / (len * c.norm);
-    
-    // Bias: favor simple major/minor triads over complex 7/sus/dim chords
-    const isTriad = !c.name.includes("7") && !c.name.includes("sus") && !c.name.includes("dim");
+
+    const isTriad = c.suffix === "" || c.suffix === "m";
     if (isTriad) {
-      score *= 1.15; // 15% boost to simple major/minor triads
+      score *= 1.22;
     }
-    
+
+    const item = { chord: c, score };
+    scored.push(item);
     if (score > bestScore) {
       bestScore = score;
-      best = c.name;
+      best = item;
     }
   });
-  return bestScore > 0.72 ? best : null;
+
+  if (!best || bestScore <= 0.74) return null;
+  return simplifyExtendedChord(best, scored, norm);
+}
+
+function simplifyExtendedChord(best, scored, norm) {
+  const suffix = best.chord.suffix;
+  if (suffix !== "7" && suffix !== "m7" && suffix !== "maj7") {
+    return best.chord.name;
+  }
+
+  const triadSuffix = suffix === "m7" ? "m" : "";
+  const triad = scored.find((item) => item.chord.root === best.chord.root && item.chord.suffix === triadSuffix);
+  if (!triad) return best.chord.name;
+
+  const seventhInterval = suffix === "maj7" ? 11 : 10;
+  const seventhStrength = norm[(best.chord.root + seventhInterval) % 12] || 0;
+  const triadIsClose = triad.score >= best.score * 0.94;
+  if (triadIsClose || seventhStrength < 0.5) {
+    return triad.chord.name;
+  }
+
+  return best.chord.name;
 }
 
 export function analyzeBuffer(buffer, onProgress) {
@@ -1245,7 +1276,7 @@ export function analyzeBuffer(buffer, onProgress) {
   
   return ctx.startRendering().then(() => {
     frames.sort((a, b) => a.t - b.t);
-    // stabilizacija: akord vazi tek kad traje >= 3 uzastopna okvira (0.75s)
+    // stabilizacija: akord vazi tek kad traje >= 4 uzastopna okvira (1s)
     const out = [];
     let run = null;
     
@@ -1256,13 +1287,13 @@ export function analyzeBuffer(buffer, onProgress) {
         run.end = frame.t;
         return;
       }
-      if (run && run.count >= 3 && (!out.length || out[out.length - 1].n !== run.chord)) {
+      if (run && run.count >= 4 && (!out.length || out[out.length - 1].n !== run.chord)) {
         out.push({ t: Math.round((run.start - HOP) * 10) / 10, n: run.chord });
       }
       run = { chord: frame.chord, count: 1, start: frame.t, end: frame.t };
     });
     
-    if (run && run.count >= 3 && (!out.length || out[out.length - 1].n !== run.chord)) {
+    if (run && run.count >= 4 && (!out.length || out[out.length - 1].n !== run.chord)) {
       out.push({ t: Math.round((run.start - HOP) * 10) / 10, n: run.chord });
     }
     return out;
