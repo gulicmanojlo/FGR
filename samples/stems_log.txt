@@ -1,19 +1,73 @@
 Starting stem processing script...
-Scanning playlist: playlists/feelgood.json
---- Processing song: Luis - A delismo sve na pola (mr6ab8n4-vnn9o3) ---
-Downloading audio from https://www.youtube.com/watch?v=7wIwbe-F9eY...
-Running command: yt-dlp --impersonate chrome -x --audio-format mp3 -o temp_audio.mp3 https://www.youtube.com/watch?v=7wIwbe-F9eY
-yt-dlp stdout:
-[youtube] Extracting URL: https://www.youtube.com/watch?v=7wIwbe-F9eY
-[youtube] 7wIwbe-F9eY: Downloading webpage
-[youtube] 7wIwbe-F9eY: Downloading tv client config
-[youtube] 7wIwbe-F9eY: Downloading tv player API JSON
-[youtube] 7wIwbe-F9eY: Downloading web safari player API JSON
+Processing uploaded file: Luis - Sve se osim tuge deli - Amol.mp3
+Parsed Title: Luis - Sve se osim tuge deli, Key: Amol, ID: luis-sve-se-osim-tuge-deli
+Adding new song luis-sve-se-osim-tuge-deli to playlist.
+Found local file luis-sve-se-osim-tuge-deli.mp3. Starting separation...
+Running Demucs stem separation...
+Running command: demucs -d cpu -n htdemucs luis-sve-se-osim-tuge-deli.mp3
+demucs stdout:
+Downloading: "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th" to /home/runner/.cache/torch/hub/checkpoints/955717e8-8726e21a.th
+Selected model is a bag of 1 models. You will see that many progress bars per track.
+Separated tracks will be stored in /home/runner/work/FGR/FGR/separated/htdemucs
+Separating track luis-sve-se-osim-tuge-deli.mp3
 
-yt-dlp stderr:
-Deprecated Feature: Support for Python version 3.9 has been deprecated. Please update to Python 3.10 or above
-WARNING: [youtube] No title found in player responses; falling back to title from initial data. Other metadata may also be missing
-ERROR: [youtube] 7wIwbe-F9eY: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+demucs stderr:
 
-Failed to download audio for mr6ab8n4-vnn9o3: yt-dlp exited with code 1
+  0%|          | 0.00/80.2M [00:00<?, ?B/s]
+ 41%|████▏     | 33.1M/80.2M [00:00<00:00, 347MB/s]
+ 94%|█████████▍| 75.4M/80.2M [00:00<00:00, 403MB/s]
+100%|██████████| 80.2M/80.2M [00:00<00:00, 396MB/s]
+
+  0%|                                                                                 | 0.0/216.45 [00:00<?, ?seconds/s]
+  3%|█▉                                                                      | 5.85/216.45 [00:02<01:46,  1.98seconds/s]
+  5%|███▉                                                                    | 11.7/216.45 [00:05<01:39,  2.06seconds/s]
+  8%|████▋                                                     | 17.549999999999997/216.45 [00:08<01:34,  2.10seconds/s]
+ 11%|███████▊                                                                | 23.4/216.45 [00:11<01:31,  2.12seconds/s]
+ 14%|█████████▌                                                             | 29.25/216.45 [00:13<01:28,  2.12seconds/s]
+ 16%|█████████▍                                                | 35.099999999999994/216.45 [00:16<01:25,  2.13seconds/s]
+ 19%|██████████▉                                               | 40.949999999999996/216.45 [00:19<01:22,  2.14seconds/s]
+ 22%|███████████████▌                                                        | 46.8/216.45 [00:22<01:19,  2.13seconds/s]
+ 24%|█████████████████▎                                                     | 52.65/216.45 [00:24<01:16,  2.14seconds/s]
+ 27%|███████████████████▍                                                    | 58.5/216.45 [00:27<01:14,  2.13seconds/s]
+ 30%|█████████████████████                                                  | 64.35/216.45 [00:30<01:11,  2.13seconds/s]
+ 32%|███████████████████▏                                       | 70.19999999999999/216.45 [00:33<01:08,  2.13seconds/s]
+ 35%|████████████████████████▉                                              | 76.05/216.45 [00:35<01:05,  2.13seconds/s]
+ 38%|██████████████████████▎                                    | 81.89999999999999/216.45 [00:38<01:03,  2.13seconds/s]
+ 41%|████████████████████████████▊                                          | 87.75/216.45 [00:41<01:00,  2.13seconds/s]
+ 43%|███████████████████████████████▏                                        | 93.6/216.45 [00:44<00:57,  2.13seconds/s]
+ 46%|███████████████████████████                                | 99.44999999999999/216.45 [00:46<00:54,  2.13seconds/s]
+ 49%|██████████████████████████████████▌                                    | 105.3/216.45 [00:49<00:52,  2.13seconds/s]
+ 51%|█████████████████████████████▊                            | 111.14999999999999/216.45 [00:52<00:49,  2.14seconds/s]
+ 54%|██████████████████████████████████████▍                                | 117.0/216.45 [00:55<00:46,  2.14seconds/s]
+ 57%|███████████████████████████████████████▋                              | 122.85/216.45 [00:57<00:43,  2.14seconds/s]
+ 59%|██████████████████████████████████████████▏                            | 128.7/216.45 [01:00<00:41,  2.14seconds/s]
+ 62%|████████████████████████████████████                      | 134.54999999999998/216.45 [01:03<00:38,  2.13seconds/s]
+ 65%|█████████████████████████████████████▌                    | 140.39999999999998/216.45 [01:06<00:35,  2.13seconds/s]
+ 68%|███████████████████████████████████████████████▎                      | 146.25/216.45 [01:08<00:32,  2.13seconds/s]
+ 70%|█████████████████████████████████████████████████▉                     | 152.1/216.45 [01:11<00:30,  2.13seconds/s]
+ 73%|███████████████████████████████████████████████████                   | 157.95/216.45 [01:14<00:27,  2.13seconds/s]
+ 76%|███████████████████████████████████████████▉              | 163.79999999999998/216.45 [01:16<00:24,  2.13seconds/s]
+ 78%|█████████████████████████████████████████████▍            | 169.64999999999998/216.45 [01:19<00:21,  2.13seconds/s]
+ 81%|█████████████████████████████████████████████████████████▌             | 175.5/216.45 [01:22<00:19,  2.13seconds/s]
+ 84%|██████████████████████████████████████████████████████████▋           | 181.35/216.45 [01:25<00:16,  2.14seconds/s]
+ 86%|█████████████████████████████████████████████████████████████▍         | 187.2/216.45 [01:27<00:13,  2.13seconds/s]
+ 89%|███████████████████████████████████████████████████▋      | 193.04999999999998/216.45 [01:30<00:10,  2.14seconds/s]
+ 92%|█████████████████████████████████████████████████████▎    | 198.89999999999998/216.45 [01:33<00:08,  2.13seconds/s]
+ 95%|██████████████████████████████████████████████████████████████████▏   | 204.75/216.45 [01:36<00:05,  2.13seconds/s]
+ 97%|█████████████████████████████████████████████████████████████████████  | 210.6/216.45 [01:38<00:02,  2.13seconds/s]
+100%|██████████████████████████████████████████████████████████████████████| 216.45/216.45 [01:41<00:00,  2.14seconds/s]
+100%|██████████████████████████████████████████████████████████████████████| 216.45/216.45 [01:41<00:00,  2.13seconds/s]
+/opt/hostedtoolcache/Python/3.9.25/x64/lib/python3.9/site-packages/torchaudio/_backend/utils.py:337: UserWarning: In 2.9, this function's implementation will be changed to use torchaudio.save_with_torchcodec` under the hood. Some parameters like format, encoding, bits_per_sample, buffer_size, and ``backend`` will be ignored. We recommend that you port your code to rely directly on TorchCodec's encoder instead: https://docs.pytorch.org/torchcodec/stable/generated/torchcodec.encoders.AudioEncoder
+  warnings.warn(
+/opt/hostedtoolcache/Python/3.9.25/x64/lib/python3.9/site-packages/torchaudio/_backend/ffmpeg.py:247: UserWarning: torio.io._streaming_media_encoder.StreamingMediaEncoder has been deprecated. This deprecation is part of a large refactoring effort to transition TorchAudio into a maintenance phase. The decoding and encoding capabilities of PyTorch for both audio and video are being consolidated into TorchCodec. Please see https://github.com/pytorch/audio/issues/3902 for more information. It will be removed from the 2.9 release. 
+  s = torchaudio.io.StreamWriter(uri, format=muxer, buffer_size=buffer_size)
+
+Converting stems to MP3...
+Saved stem: samples/luis-sve-se-osim-tuge-deli/bass.mp3
+Saved stem: samples/luis-sve-se-osim-tuge-deli/vocals.mp3
+Saved stem: samples/luis-sve-se-osim-tuge-deli/drums.mp3
+Saved stem: samples/luis-sve-se-osim-tuge-deli/other.mp3
+Deleted source file: luis-sve-se-osim-tuge-deli.mp3
+Successfully processed stems for luis-sve-se-osim-tuge-deli!
+Saving final playlist updates to playlists/feelgood.json...
 Main processing finished.
