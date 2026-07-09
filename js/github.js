@@ -117,6 +117,7 @@ export function buildRepertoireFileData() {
       key: song.key,
       url: song.url,
       videoId: song.videoId,
+      ...(song.stems ? { stems: song.stems } : {}),
       ...(Array.isArray(song.chords) && song.chords.length ? { chords: song.chords } : {})
     }))
   };
@@ -152,7 +153,8 @@ function normalizeSong(song) {
     key: String(song?.key || ""),
     url,
     videoId,
-    chords
+    chords,
+    stems: Boolean(song?.stems)
   };
 }
 
