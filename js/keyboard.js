@@ -653,7 +653,7 @@ function releaseKeyboardBaseKey(code) {
 }
 
 function rememberKeyboardBaseKeyRelease(code) {
-  const keyState = state.heldBaseKeys.get(code);
+  const keyState = state.heldBaseKeys.get(code) || state.pendingBaseKeyTaps.get(code);
   if (!keyState) {
     return;
   }
@@ -672,9 +672,14 @@ function schedulePendingBaseKeyTap(code, pitch, order) {
   cancelPendingBaseKeyTap(code);
 
   const timerId = window.setTimeout(() => {
+    const pending = state.pendingBaseKeyTaps.get(code);
     state.pendingBaseKeyTaps.delete(code);
     setKeyboardBaseKey(code, pitch, order);
     recomputeSound();
+    if (pending && pending.released) {
+      state.heldBaseKeys.delete(code);
+      recomputeSound();
+    }
   }, state.doubleTapSharpMs);
 
   state.pendingBaseKeyTaps.set(code, {

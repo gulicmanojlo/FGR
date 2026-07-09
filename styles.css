@@ -1993,6 +1993,127 @@ a.feature-card:hover {
 
 .legacy-sheet { display: none !important; }
 
+/* Song Selection Mode */
+.song-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 9px;
+  border-top: 1px solid var(--line);
+  background: var(--panel-bg-2);
+}
+
+.song-selection-actions .text-button {
+  flex: 1;
+}
+
+.song-item.selected-action {
+  background: color-mix(in srgb, var(--danger) 15%, var(--panel-bg-2));
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+/* Custom Context Menu */
+.custom-context-menu {
+  position: fixed;
+  z-index: 10000;
+  background: var(--panel-bg-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 4px 0;
+  min-width: 140px;
+}
+
+.custom-context-menu-item {
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  display: block;
+}
+
+.custom-context-menu-item:hover {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.song-select-checkbox {
+  cursor: pointer;
+  accent-color: var(--danger);
+  transform: scale(1.1);
+}
+
+.si-title-edit-wrap {
+  grid-column: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.inline-title-input {
+  min-height: 28px !important;
+  background: var(--panel-bg) !important;
+  border: 1px solid var(--accent) !important;
+  border-radius: 4px !important;
+  color: var(--ink) !important;
+}
+
+/* Dock Settings Panel styling overrides */
+.dock .piano-settings-panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  position: relative;
+  margin-top: 0;
+  padding: 4px 0 8px 0;
+}
+
+.dock .piano-settings-grid {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+
+.dock .piano-settings-group {
+  flex: 1;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.dock .piano-settings-group .compact-field {
+  flex: 0 1 auto;
+}
+
+.dock .piano-settings-group .toggle-row {
+  white-space: nowrap;
+}
+
+.dock .piano-settings-head {
+  margin-bottom: 6px;
+}
+
+@media (max-width: 1200px) {
+  .dock .piano-settings-grid {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .dock .piano-settings-group {
+    flex-wrap: wrap;
+  }
+}
+
 /* ---- srednja kolona ---- */
 
 .mcol { display: flex; flex-direction: column; gap: 9px; min-width: 0; overflow-y: auto; padding-right: 2px; }

@@ -89,6 +89,11 @@ let songTitleInput, songKeyInput, songUrlInput, addSongButton, songSearchInput, 
 let mobileModifierButtons;
 let abA = null, abB = null, abTimer = null;
 
+// New elements for context menu, selection mode, and edit dialog
+let songContextMenu, ctxSelectSong, ctxRenameSong, ctxEditSong;
+let songSelectionActions, deleteSelectedSongsButton, cancelSelectionButton;
+let editSongDialog, editSongDialogTitle, editSongDialogClose, editSongForm, editSongTitleInput, editSongKeyInput, editSongUrlInput, editSongCancelButton, editSongSaveButton;
+
 function cacheDom() {
   app = $("app");
   keyboard = $("keyboard");
@@ -135,6 +140,25 @@ function cacheDom() {
   songSearchInput = $("songSearchInput");
   songSearchButton = $("songSearchButton");
   mobileModifierButtons = [...document.querySelectorAll("[data-mobile-modifier]")];
+
+  songContextMenu = $("songContextMenu");
+  ctxSelectSong = $("ctxSelectSong");
+  ctxRenameSong = $("ctxRenameSong");
+  ctxEditSong = $("ctxEditSong");
+
+  songSelectionActions = $("songSelectionActions");
+  deleteSelectedSongsButton = $("deleteSelectedSongsButton");
+  cancelSelectionButton = $("cancelSelectionButton");
+
+  editSongDialog = $("editSongDialog");
+  editSongDialogTitle = $("editSongDialogTitle");
+  editSongDialogClose = $("editSongDialogClose");
+  editSongForm = $("editSongForm");
+  editSongTitleInput = $("editSongTitleInput");
+  editSongKeyInput = $("editSongKeyInput");
+  editSongUrlInput = $("editSongUrlInput");
+  editSongCancelButton = $("editSongCancelButton");
+  editSongSaveButton = $("editSongSaveButton");
 }
 
 // Inicijalizacija aplikacije
@@ -370,6 +394,77 @@ function bindEvents() {
       closePlaylistBrowser();
     }
   });
+
+  // Global click to close context menu
+  document.addEventListener("click", () => {
+    hideSongContextMenu();
+  });
+
+  // Context menu actions
+  if (ctxSelectSong) {
+    ctxSelectSong.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const songId = state.contextMenuSongId;
+      hideSongContextMenu();
+      if (songId) {
+        state.selectionModeActive = true;
+        state.selectedSongsForAction.clear();
+        state.selectedSongsForAction.add(songId);
+        renderCompactSongList();
+        updatePlaylistSelectionActionsVisibility();
+      }
+    });
+  }
+
+  if (ctxRenameSong) {
+    ctxRenameSong.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const songId = state.contextMenuSongId;
+      hideSongContextMenu();
+      if (songId) {
+        state.inlineEditingSongId = songId;
+        renderCompactSongList();
+      }
+    });
+  }
+
+  if (ctxEditSong) {
+    ctxEditSong.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const songId = state.contextMenuSongId;
+      hideSongContextMenu();
+      if (songId) {
+        openEditSongDialog(songId);
+      }
+    });
+  }
+
+  // Selection Actions
+  if (deleteSelectedSongsButton) {
+    deleteSelectedSongsButton.addEventListener("click", () => {
+      deleteSelectedSongs();
+    });
+  }
+
+  if (cancelSelectionButton) {
+    cancelSelectionButton.addEventListener("click", () => {
+      cancelSelectionMode();
+    });
+  }
+
+  // Edit Song Dialog
+  if (editSongDialogClose) editSongDialogClose.addEventListener("click", closeEditSongDialog);
+  if (editSongCancelButton) editSongCancelButton.addEventListener("click", closeEditSongDialog);
+  const editSongDialogBackdrop = $("editSongDialogBackdrop");
+  if (editSongDialogBackdrop) {
+    editSongDialogBackdrop.addEventListener("click", closeEditSongDialog);
+  }
+  if (editSongForm) {
+    editSongForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      saveEditedSong();
+    });
+  }
 
   // YouTube plejer kontrole
   youtubePlayPause.addEventListener("click", triggerSelectedSongToggle);
@@ -1352,32 +1447,129 @@ function renderCompactSongList() {
   }
   
   visibleSongs.forEach(({ song }) => {
+    const isSelectedForAction = state.selectedSongsForAction.has(song.id);
+    const isInlineEditing = state.inlineEditingSongId === song.id;
+
     const item = document.createElement("div");
-    item.className = "song-item" + (song.id === state.selectedSongId ? " on" : "");
+    item.className = "song-item";
+    if (song.id === state.selectedSongId) {
+      item.classList.add("on");
+    }
+    if (state.selectionModeActive && isSelectedForAction) {
+      item.classList.add("selected-action");
+    }
     item.dataset.songId = song.id;
 
-    const main = document.createElement("button");
-    main.type = "button";
-    main.className = "song-item-main";
-    const chordCount = Array.isArray(song.chords) ? song.chords.length : 0;
-    main.innerHTML =
-      '<span class="si-title"></span><span class="si-key"></span>' +
-      '<span class="si-sub">' + (chordCount ? "chart · " + chordCount + " akorada" : "samo link") + "</span>";
-    main.querySelector(".si-title").textContent = song.title || "(bez naziva)";
-    main.querySelector(".si-key").textContent = song.key || "";
-    main.addEventListener("click", () => selectSong(song.id));
-
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "song-item-del";
-    del.textContent = "×";
-    del.title = "Obrisi pesmu";
-    del.addEventListener("click", (event) => {
-      event.stopPropagation();
-      deleteSong(song.id);
+    // Add context menu listener
+    item.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      if (state.inlineEditingSongId) return;
+      showSongContextMenu(song.id, event.clientX, event.clientY);
     });
 
-    item.append(main, del);
+    const main = document.createElement(isInlineEditing ? "div" : "button");
+    if (!isInlineEditing) {
+      main.type = "button";
+    }
+    main.className = "song-item-main";
+    const chordCount = Array.isArray(song.chords) ? song.chords.length : 0;
+
+    if (isInlineEditing) {
+      main.innerHTML =
+        '<div class="si-title-edit-wrap"></div><span class="si-key"></span>' +
+        '<span class="si-sub">' + (chordCount ? "chart · " + chordCount + " akorada" : "samo link") + "</span>";
+      
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "sheet-input inline-title-input";
+      input.value = song.title || "";
+      input.style.width = "100%";
+      input.style.height = "28px";
+      input.style.padding = "0 6px";
+      input.style.fontSize = "12px";
+
+      input.addEventListener("click", (e) => e.stopPropagation());
+      input.addEventListener("pointerdown", (e) => e.stopPropagation());
+      
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          const newTitle = input.value.trim();
+          if (newTitle) {
+            song.title = newTitle;
+            state.inlineEditingSongId = null;
+            saveRepertoire();
+            renderRepertoire();
+            updateSelectedSongPanel();
+          }
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          state.inlineEditingSongId = null;
+          renderCompactSongList();
+        }
+      });
+
+      input.addEventListener("blur", () => {
+        setTimeout(() => {
+          if (state.inlineEditingSongId === song.id) {
+            const newTitle = input.value.trim();
+            if (newTitle) {
+              song.title = newTitle;
+            }
+            state.inlineEditingSongId = null;
+            saveRepertoire();
+            renderRepertoire();
+            updateSelectedSongPanel();
+          }
+        }, 150);
+      });
+
+      main.querySelector(".si-title-edit-wrap").append(input);
+      main.querySelector(".si-key").textContent = song.key || "";
+      
+      requestAnimationFrame(() => {
+        input.focus();
+        input.select();
+      });
+    } else {
+      let checkboxHTML = "";
+      if (state.selectionModeActive) {
+        checkboxHTML = `<input type="checkbox" class="song-select-checkbox" ${isSelectedForAction ? "checked" : ""} style="margin-right: 8px; pointer-events: none;">`;
+      }
+      
+      main.innerHTML =
+        checkboxHTML +
+        '<span class="si-title"></span><span class="si-key"></span>' +
+        '<span class="si-sub">' + (chordCount ? "chart · " + chordCount + " akorada" : "samo link") + "</span>";
+      
+      main.querySelector(".si-title").textContent = song.title || "(bez naziva)";
+      main.querySelector(".si-key").textContent = song.key || "";
+      
+      main.addEventListener("click", (event) => {
+        if (state.selectionModeActive) {
+          event.stopPropagation();
+          toggleSongSelection(song.id);
+        } else {
+          selectSong(song.id);
+        }
+      });
+    }
+
+    if (!state.selectionModeActive && !isInlineEditing) {
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "song-item-del";
+      del.textContent = "×";
+      del.title = "Obrisi pesmu";
+      del.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deleteSong(song.id);
+      });
+      item.append(main, del);
+    } else {
+      item.append(main);
+    }
+
     listEl.append(item);
   });
 }
@@ -2755,4 +2947,126 @@ function playSuccessBeep() {
   gain.connect(ctx.destination);
   osc.start(now);
   osc.stop(now + 0.26);
+}
+
+// ---------------- CONTEXT MENU, EDIT & SELECTION HELPERS ----------------
+function showSongContextMenu(songId, clientX, clientY) {
+  state.contextMenuSongId = songId;
+  const menu = $("songContextMenu");
+  if (!menu) return;
+  
+  menu.hidden = false;
+  menu.style.left = `${clientX}px`;
+  menu.style.top = `${clientY}px`;
+  
+  const rect = menu.getBoundingClientRect();
+  const winWidth = window.innerWidth;
+  const winHeight = window.innerHeight;
+  
+  if (clientX + rect.width > winWidth) {
+    menu.style.left = `${winWidth - rect.width - 8}px`;
+  }
+  if (clientY + rect.height > winHeight) {
+    menu.style.top = `${winHeight - rect.height - 8}px`;
+  }
+}
+
+function hideSongContextMenu() {
+  state.contextMenuSongId = null;
+  const menu = $("songContextMenu");
+  if (menu) {
+    menu.hidden = true;
+  }
+}
+
+function toggleSongSelection(songId) {
+  if (state.selectedSongsForAction.has(songId)) {
+    state.selectedSongsForAction.delete(songId);
+  } else {
+    state.selectedSongsForAction.add(songId);
+  }
+  renderCompactSongList();
+}
+
+function deleteSelectedSongs() {
+  if (state.selectedSongsForAction.size === 0) return;
+  if (confirm(`Da li ste sigurni da želite da obrišete ${state.selectedSongsForAction.size} selektovanih pesama?`)) {
+    state.repertoire = state.repertoire.filter(song => !state.selectedSongsForAction.has(song.id));
+    
+    if (state.selectedSongsForAction.has(state.selectedSongId)) {
+      state.selectedSongId = state.repertoire[0]?.id || null;
+    }
+    
+    state.selectionModeActive = false;
+    state.selectedSongsForAction.clear();
+    
+    saveRepertoire();
+    renderRepertoire();
+    updateSelectedSongPanel();
+    updatePlaylistSelectionActionsVisibility();
+  }
+}
+
+function cancelSelectionMode() {
+  state.selectionModeActive = false;
+  state.selectedSongsForAction.clear();
+  renderCompactSongList();
+  updatePlaylistSelectionActionsVisibility();
+}
+
+function updatePlaylistSelectionActionsVisibility() {
+  const actionsEl = $("songSelectionActions");
+  if (actionsEl) {
+    actionsEl.hidden = !state.selectionModeActive;
+  }
+}
+
+function openEditSongDialog(songId) {
+  const song = state.repertoire.find((s) => s.id === songId);
+  if (!song) return;
+  
+  state.editingSongId = songId;
+  editSongTitleInput.value = song.title || "";
+  editSongKeyInput.value = song.key || "";
+  editSongUrlInput.value = song.url || "";
+  
+  editSongDialog.hidden = false;
+  editSongTitleInput.focus();
+}
+
+function closeEditSongDialog() {
+  state.editingSongId = null;
+  editSongDialog.hidden = true;
+}
+
+function saveEditedSong() {
+  const songId = state.editingSongId;
+  const song = state.repertoire.find((s) => s.id === songId);
+  if (!song) return;
+  
+  const title = editSongTitleInput.value.trim();
+  const key = editSongKeyInput.value.trim();
+  const url = editSongUrlInput.value.trim();
+  const videoId = parseYouTubeVideoId(url);
+  
+  if (!videoId) {
+    setYouTubeStatus("Unesi YouTube link");
+    editSongUrlInput.focus();
+    return;
+  }
+  
+  song.title = title || `YouTube ${videoId}`;
+  song.key = key;
+  song.url = url;
+  song.videoId = videoId;
+  
+  saveRepertoire();
+  renderRepertoire();
+  updateSelectedSongPanel();
+  if (song.id === state.selectedSongId) {
+    loadSelectedSong({ autoplay: false });
+  }
+  
+  closeEditSongDialog();
+  setYouTubeStatus("Izmenjeno");
 }

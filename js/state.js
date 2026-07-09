@@ -157,6 +157,11 @@ export const state = {
   playlistDirtyAfterSave: false,
   selectedSongId: null,
   songSearchQuery: "",
+  selectionModeActive: false,
+  selectedSongsForAction: new Set(),
+  inlineEditingSongId: null,
+  editingSongId: null,
+  contextMenuSongId: null,
   
   // YouTube
   youtubeSeekSeconds: DEFAULT_YOUTUBE_SEEK_SECONDS,
