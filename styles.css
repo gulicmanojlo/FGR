@@ -2071,43 +2071,126 @@ a.feature-card:hover {
   box-shadow: none;
   position: relative;
   margin-top: 0;
-  padding: 4px 0 8px 0;
+  padding: 2px 0 4px 0;
+  font-size: 11px;
 }
 
 .dock .piano-settings-grid {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
-  align-items: stretch;
-  gap: 8px;
+  align-items: center;
+  gap: 4px;
   width: 100%;
 }
 
 .dock .piano-settings-group {
-  flex: 1;
+  flex: 0 1 auto;
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
+  gap: 4px;
+  padding: 3px 6px;
+  min-height: 32px;
 }
 
 .dock .piano-settings-group .compact-field {
   flex: 0 1 auto;
+  gap: 3px;
+  min-height: 24px;
+  font-size: 11px;
+}
+
+.dock .piano-settings-group .compact-field > span {
+  font-size: 10px;
+  margin-right: 1px;
 }
 
 .dock .piano-settings-group .toggle-row {
   white-space: nowrap;
+  min-height: 24px;
+  padding: 0 5px;
+  font-size: 11px;
+  gap: 4px;
+  border-radius: 4px;
+}
+
+.dock .piano-settings-group .toggle-row input {
+  width: 14px;
+  height: 14px;
+}
+
+.dock .piano-settings-title {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  margin-right: 2px;
+}
+
+.dock .volume-slider {
+  width: 68px !important;
+}
+
+.dock .mini-slider {
+  width: 50px !important;
+}
+
+.dock .sound-select {
+  min-height: 24px;
+  height: 24px;
+  max-width: 100px;
+  padding: 0 4px;
+  font-size: 11px;
+}
+
+.dock .segmented.compact {
+  padding: 2px;
+}
+
+.dock .segmented.compact span {
+  min-width: 44px;
+  min-height: 22px;
+  padding: 0 4px;
+  font-size: 10.5px;
+  border-radius: 4px;
+}
+
+.dock .text-button.mini {
+  min-height: 24px;
+  padding: 0 6px;
+  font-size: 11px;
 }
 
 .dock .piano-settings-head {
-  margin-bottom: 6px;
+  margin-bottom: 2px;
+  padding: 0 4px;
 }
 
-@media (max-width: 1200px) {
+.dock .piano-settings-head b {
+  font-size: 10px;
+}
+
+.dock .midi-settings-status {
+  font-size: 10.5px;
+}
+
+.dock .piano-settings-note {
+  font-size: 10px;
+}
+
+@media (max-width: 1350px) {
+  .dock .piano-settings-grid {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .dock .piano-settings-group {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 900px) {
   .dock .piano-settings-grid {
     flex-direction: column;
-    gap: 6px;
+    align-items: stretch;
   }
   .dock .piano-settings-group {
     flex-wrap: wrap;
