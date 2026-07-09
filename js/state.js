@@ -192,6 +192,7 @@ export const state = {
   mixer: {
     bass: { volume: 1.0, mute: false, solo: false },
     mid: { volume: 1.0, mute: false, solo: false },
+    vocals: { volume: 1.0, mute: false, solo: false },
     high: { volume: 1.0, mute: false, solo: false }
   }
 };

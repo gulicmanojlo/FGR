@@ -780,8 +780,8 @@ function bindEvents() {
 }
 
 function bindMixerEvents() {
-  const channels = ["Bass", "Mid", "High"];
-  const keys = { Bass: "bass", Mid: "mid", High: "high" };
+  const channels = ["Bass", "Mid", "Vocals", "High"];
+  const keys = { Bass: "bass", Mid: "mid", Vocals: "vocals", High: "high" };
 
   channels.forEach((chan) => {
     const volInput = $(`mix${chan}Vol`);

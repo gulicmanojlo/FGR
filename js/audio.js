@@ -855,6 +855,7 @@ export const rec = {
   gains: {
     bass: null,
     mid: null,
+    vocals: null,
     high: null
   },
   playing: false,
@@ -902,10 +903,12 @@ export function recStop(keepOffset) {
     try {
       rec.gains.bass.disconnect();
       rec.gains.mid.disconnect();
+      if (rec.gains.vocals) rec.gains.vocals.disconnect();
       rec.gains.high.disconnect();
     } catch (e) {}
     rec.gains.bass = null;
     rec.gains.mid = null;
+    rec.gains.vocals = null;
     rec.gains.high = null;
   }
   if (rec.playing && keepOffset) {
@@ -923,8 +926,9 @@ export function updateMixerGains() {
     return;
   }
 
-  const { bass, mid, high } = state.mixer;
-  const isAnySolo = bass.solo || mid.solo || high.solo;
+  const { bass, mid, vocals, high } = state.mixer;
+  const vocalsState = vocals || { volume: 1.0, mute: false, solo: false };
+  const isAnySolo = bass.solo || mid.solo || vocalsState.solo || high.solo;
 
   const calculateGain = (channelState) => {
     if (isAnySolo) {
@@ -936,6 +940,9 @@ export function updateMixerGains() {
   const now = rec.ctx ? rec.ctx.currentTime : 0;
   rec.gains.bass.gain.setTargetAtTime(calculateGain(bass), now, 0.015);
   rec.gains.mid.gain.setTargetAtTime(calculateGain(mid), now, 0.015);
+  if (rec.gains.vocals) {
+    rec.gains.vocals.gain.setTargetAtTime(calculateGain(vocalsState), now, 0.015);
+  }
   rec.gains.high.gain.setTargetAtTime(calculateGain(high), now, 0.015);
 }
 
@@ -950,11 +957,13 @@ export function recPlayFrom(offset) {
   // Initialize gain nodes
   rec.gains.bass = rec.ctx.createGain();
   rec.gains.mid = rec.ctx.createGain();
+  rec.gains.vocals = rec.ctx.createGain();
   rec.gains.high = rec.ctx.createGain();
 
   const dest = state.masterGain || rec.ctx.destination;
   rec.gains.bass.connect(dest);
   rec.gains.mid.connect(dest);
+  rec.gains.vocals.connect(dest);
   rec.gains.high.connect(dest);
 
   rec.sources = [];
@@ -963,7 +972,7 @@ export function recPlayFrom(offset) {
   if (rec.hasStems && rec.stems) {
     const stemsToLoad = [
       { name: "bass", destNode: rec.gains.bass, pitchShift: true },
-      { name: "vocals", destNode: rec.gains.mid, pitchShift: true },
+      { name: "vocals", destNode: rec.gains.vocals, pitchShift: true },
       { name: "other", destNode: rec.gains.mid, pitchShift: true },
       { name: "drums", destNode: rec.gains.high, pitchShift: false }
     ];
