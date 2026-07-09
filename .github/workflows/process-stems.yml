@@ -30,7 +30,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -U --pre yt-dlp
-          pip install demucs pydub
+          pip install curl_cffi demucs pydub
 
       - name: Run Stem Processor
         run: |
