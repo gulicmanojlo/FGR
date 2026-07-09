@@ -1,9 +1,9 @@
 {
   "version": 1,
   "name": "FeelGood",
-  "updatedAt": "2026-07-09T15:44:08.133Z",
+  "updatedAt": "2026-07-09T22:33:04.729Z",
   "settings": {
-    "selectedSongId": "luis-sve-se-osim-tuge-deli",
+    "selectedSongId": "mre31tzw-rwx8sw",
     "seekSeconds": 1
   },
   "songs": [
@@ -13,7 +13,6 @@
       "key": "Amol",
       "url": "",
       "videoId": "",
-      "stems": false,
       "chords": [
         {
           "t": 4.8,
@@ -272,6 +271,13 @@
           "n": "G"
         }
       ]
+    },
+    {
+      "id": "mre31tzw-rwx8sw",
+      "title": "Aleksandra Prijovic - Legitimno",
+      "key": "Gismol",
+      "url": "https://www.youtube.com/watch?v=6u_cgKR_D3w",
+      "videoId": "6u_cgKR_D3w"
     }
   ]
 }
