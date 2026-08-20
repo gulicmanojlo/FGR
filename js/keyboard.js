@@ -1,5 +1,5 @@
 import { state, NOTE_NAMES, clamp, readJsonStorage, writeJsonStorage, KEYBOARD_SETTINGS_STORAGE_KEY, KEYBOARD_DOUBLE_TAP_SHARP_KEYS } from "./state.js";
-import { ensureAudio, setActiveMidiSet, noteToMidi, pitchFromMidi, octaveFromMidi, recomputeSound } from "./audio.js";
+import { ensureAudio, setActiveMidiSet, noteToMidi, pitchFromMidi, octaveFromMidi, recomputeSound } from "./audio.js?v=159";
 
 // Konstante za mapiranje
 export const KEYBOARD_MAP = new Map([
@@ -137,7 +137,7 @@ function getKeyboardInversion(rootKey = null) {
     return state.keyboardInversionMemory.get(rootKey);
   }
 
-  return "root";
+  return Number(state.manualInversionStep) || "root";
 }
 
 function getHeldKeyboardInversionStep() {
@@ -191,9 +191,10 @@ function getMobileInversion() {
 }
 
 function getKeyboardChordColor() {
+  const manualExtension = state.manualChordExtension;
   return {
-    seven: state.keyboardChordColors.seven.size > 0 || state.keyboardChordColorLatched.seven,
-    nine: state.keyboardChordColors.nine.size > 0 || state.keyboardChordColorLatched.nine,
+    seven: manualExtension === "seven" || state.keyboardChordColors.seven.size > 0 || state.keyboardChordColorLatched.seven,
+    nine: manualExtension === "nine" || state.keyboardChordColors.nine.size > 0 || state.keyboardChordColorLatched.nine,
     maj: state.keyboardChordColors.maj.size > 0,
     sus: state.keyboardChordColors.sus.size > 0,
     dim: state.keyboardChordColors.dim.size > 0,
@@ -253,7 +254,7 @@ export function getMobileChord() {
   const quality = state.mobileMinorPointers.size ? "minor" : "major";
   const inversion = getMobileInversion();
 
-  return buildChord(activeRoot.midi, quality, inversion);
+  return buildChord(activeRoot.midi, quality, inversion, getKeyboardChordColor());
 }
 
 function buildChord(rootMidi, quality, inversion, color = {}) {

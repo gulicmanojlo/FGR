@@ -63,6 +63,8 @@ export const state = {
   audioContext: null,
   masterGain: null,
   masterCompressor: null,
+  assistedChannelBuses: null,
+  assistedChannelGains: null,
   sampleBuffers: new Map(),
   sampleLoadingPromise: null,
   samplesReady: false,
@@ -77,6 +79,7 @@ export const state = {
   baseOctave: 4,
   activeNotes: new Map(),
   activeMidiSet: new Set(),
+  assistedMidiSets: new Map(),
   activeChordText: "-",
   
   // UI & Preferences
@@ -111,6 +114,17 @@ export const state = {
     right: new Map()
   },
   keyboardInversionMemory: new Map(),
+  // Persistent manual chord controls. These are intentionally consumed only
+  // by keyboard/mouse playing; analyzed melody, bass and chart harmony keep
+  // their detected register and voicing.
+  manualInversionStep: 0,
+  manualChordExtension: "none",
+  extensionVoicing: "upper",
+  omitExtensionRootEnabled: false,
+  closeVoicingEnabled: false,
+  closeVoicingReferenceMidis: null,
+  retriggerChordOnChangeEnabled: true,
+  retriggerChordRequested: false,
   keyboardLowerOctaves: new Map(),
   keyboardLowerOctaveLatched: false,
   keyboardLowerOctaveMemoryKeys: new Set(),
@@ -191,15 +205,26 @@ export const state = {
   // Mixer
   mixer: {
     bass: { volume: 1.0, mute: false, solo: false },
-    mid: { volume: 1.0, mute: false, solo: false },
+    drums: { volume: 1.0, mute: false, solo: false },
     guitar: { volume: 1.0, mute: false, solo: false },
+    piano: { volume: 1.0, mute: false, solo: false },
     vocals: { volume: 1.0, mute: false, solo: false },
-    high: { volume: 1.0, mute: false, solo: false }
+    other: { volume: 1.0, mute: false, solo: false }
   },
 
   // Advanced learning tools
   showFingering: false,
+  showBeatGrid: true,
   trackMelody: false,
-  melodyTrackSource: "vocals", // "vocals" or "guitar"
-  activePitchAnalyser: null
+  melodyTrackSource: "melody", // "melody" (forspil/lead) or "bass"
+  melodyPianoEnabled: false,
+  harmonyPianoEnabled: false,
+  // Prazno znači "prema taktu iz ritmičke mreže" (valcer za 3/4, inače 1 i 3).
+  compingPattern: "",
+  darkAccent: "#e3b45c",
+  melodyColor: "#3ed38d",
+  harmonyColor: "#33a8ff",
+  pianoDockHeight: 336,
+  metronomeCollapsed: false,
+  processingServiceUrl: "http://127.0.0.1:8765"
 };
