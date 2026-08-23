@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=160";
+} from "./audio.js?v=162";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=160";
+} from "./processing-client.js?v=162";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=160";
+} from "./chord-analysis.js?v=162";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=160";
+} from "./practice-timing.js?v=162";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,24 +69,24 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=160";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=160";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=160";
-import { createPcmWavFile } from "./pcm-wav.js?v=160";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=160";
-import { resolveMixerControls } from "./mixer-routing.js?v=160";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=160";
-import { createScorePlayer } from "./score-player.js?v=160";
-import { renderHarmonyEvents } from "./voicing.js?v=160";
+} from "./preferences.js?v=162";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=162";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=162";
+import { createPcmWavFile } from "./pcm-wav.js?v=162";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=162";
+import { resolveMixerControls } from "./mixer-routing.js?v=162";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=162";
+import { createScorePlayer } from "./score-player.js?v=162";
+import { renderHarmonyEvents } from "./voicing.js?v=162";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=160";
+} from "./audio-import.js?v=162";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=160";
+} from "./pcm-capture.js?v=162";
 
 import { 
   handleKeyDown, 
@@ -128,10 +128,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=160";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=160";
-import { computeMelodyFingering } from "./melody-fingering.js?v=160";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=160";
+} from "./ui-tools.js?v=162";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=162";
+import { computeMelodyFingering } from "./melody-fingering.js?v=162";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=162";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -1780,6 +1780,7 @@ function bindEvents() {
     }
 
     const processingState = String(song?.processing?.state || "");
+    const analysisIsIncomplete = !song?.stems || !song?.assets?.mix || !(song?.chords || []).length;
     if (
       hasLocalSongAudio(song) &&
       (
@@ -1789,10 +1790,13 @@ function bindEvents() {
     ) {
       window.setTimeout(() => resumeImportedProcessing(song, { autoAnalyze: false }), 0);
     } else if (
-      hasLocalSongAudio(song)
-      && processingState === "ready"
-      && !song?.chordPatchDirty
+      !song?.chordPatchDirty
+      && (processingState === "ready" || analysisIsIncomplete)
     ) {
+      // Ask the service on every selection where something is missing, not only
+      // when the local record already looks finished. A song can be left
+      // half-written by a reload in the middle of a job, and then only the
+      // service knows that its stems, chords and note tracks are ready.
       window.setTimeout(() => syncCompletedImportedProcessing(song), 0);
     }
     if (hasLocalSongAudio(song) && song?.chordPatchDirty) {
@@ -3400,7 +3404,12 @@ async function resumeImportedProcessing(song, options = {}) {
 }
 
 async function syncCompletedImportedProcessing(song) {
-  if (!song || !hasLocalSongAudio(song) || !processingClient || song.chordPatchDirty) return false;
+  // Deliberately not gated on hasLocalSongAudio(). That check infers whether a
+  // song is local from flags a completed job sets, so a song whose job was
+  // never collected fails it — which is exactly the song that needs repairing.
+  // The service is the authority: if it reports a finished job for this id,
+  // its result belongs to this song. An unknown song 404s and we do nothing.
+  if (!song || !processingClient || song.chordPatchDirty) return false;
   const existing = processingTasks.get(song.id);
   if (existing) return existing;
   const task = (async () => {

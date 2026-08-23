@@ -1,35 +1,35 @@
-const CACHE_NAME = "pwa-klavir-v160";
+const CACHE_NAME = "pwa-klavir-v162";
 
 const CORE_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=160",
+  "./styles.css?v=162",
   "./js/state.js",
-  "./js/audio.js?v=160",
-  "./js/chord-analysis.js?v=160",
-  "./js/chord-editor.js?v=160",
+  "./js/audio.js?v=162",
+  "./js/chord-analysis.js?v=162",
+  "./js/chord-editor.js?v=162",
   "./js/keyboard.js",
-  "./js/mp3-metadata.js?v=160",
-  "./js/pcm-wav.js?v=160",
-  "./js/waveform.js?v=160",
+  "./js/mp3-metadata.js?v=162",
+  "./js/pcm-wav.js?v=162",
+  "./js/waveform.js?v=162",
   "./js/midi.js",
   "./js/github.js",
-  "./js/preferences.js?v=160",
-  "./js/practice-timing.js?v=160",
-  "./js/processing-client.js?v=160",
-  "./js/analysis-progress.js?v=160",
-  "./js/melody-fingering.js?v=160",
-  "./js/melody-phrases.js?v=160",
-  "./js/mixer-routing.js?v=160",
-  "./js/beat-grid.js?v=160",
-  "./js/score-player.js?v=160",
-  "./js/piano-voice.js?v=160",
-  "./js/voicing.js?v=160",
-  "./js/audio-import.js?v=160",
-  "./js/pcm-capture.js?v=160",
-  "./js/pcm-capture-worklet.js?v=160",
-  "./js/ui-tools.js?v=160",
-  "./js/ui-controller.js?v=160",
+  "./js/preferences.js?v=162",
+  "./js/practice-timing.js?v=162",
+  "./js/processing-client.js?v=162",
+  "./js/analysis-progress.js?v=162",
+  "./js/melody-fingering.js?v=162",
+  "./js/melody-phrases.js?v=162",
+  "./js/mixer-routing.js?v=162",
+  "./js/beat-grid.js?v=162",
+  "./js/score-player.js?v=162",
+  "./js/piano-voice.js?v=162",
+  "./js/voicing.js?v=162",
+  "./js/audio-import.js?v=162",
+  "./js/pcm-capture.js?v=162",
+  "./js/pcm-capture-worklet.js?v=162",
+  "./js/ui-tools.js?v=162",
+  "./js/ui-controller.js?v=162",
   "./manifest.webmanifest",
   "./repertoire.json",
   "./icons/icon.svg",
@@ -116,8 +116,13 @@ self.addEventListener("fetch", (event) => {
     url.pathname.endsWith(".html");
 
   if (isAppShell) {
+    // Network-first is only network-first if the request actually reaches the
+    // network. Without this the browser's own HTTP cache answers instead, and
+    // a freshly deployed index.html keeps loading the previous version's
+    // modules — the page reports the new cache name while running the old
+    // code, which is indistinguishable from the update not working at all.
     event.respondWith(
-      fetch(event.request)
+      fetch(new Request(event.request, { cache: "no-store" }))
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
