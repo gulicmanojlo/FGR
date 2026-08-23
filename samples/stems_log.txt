@@ -1,6 +1,2 @@
 Starting stem processing script...
-Processing uploaded file: Luis - Sve se osim tuge deli - Amol.mp3
-Parsed Title: Luis - Sve se osim tuge deli, Key: Amol, ID: luis-sve-se-osim-tuge-deli
-Song luis-sve-se-osim-tuge-deli already has stems. Skipping source file.
-Saving final playlist updates to playlists\feelgood.json...
-Main processing finished.
+No playlists found.
