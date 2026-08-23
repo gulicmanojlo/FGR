@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=166";
+} from "./audio.js?v=167";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=166";
+} from "./processing-client.js?v=167";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=166";
+} from "./chord-analysis.js?v=167";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=166";
+} from "./practice-timing.js?v=167";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,24 +69,24 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=166";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=166";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=166";
-import { createPcmWavFile } from "./pcm-wav.js?v=166";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=166";
-import { resolveMixerControls } from "./mixer-routing.js?v=166";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=166";
-import { createScorePlayer } from "./score-player.js?v=166";
-import { renderHarmonyEvents } from "./voicing.js?v=166";
+} from "./preferences.js?v=167";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=167";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=167";
+import { createPcmWavFile } from "./pcm-wav.js?v=167";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=167";
+import { resolveMixerControls } from "./mixer-routing.js?v=167";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=167";
+import { createScorePlayer } from "./score-player.js?v=167";
+import { renderHarmonyEvents } from "./voicing.js?v=167";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=166";
+} from "./audio-import.js?v=167";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=166";
+} from "./pcm-capture.js?v=167";
 
 import { 
   handleKeyDown, 
@@ -128,10 +128,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=166";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=166";
-import { computeMelodyFingering } from "./melody-fingering.js?v=166";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=166";
+} from "./ui-tools.js?v=167";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=167";
+import { computeMelodyFingering } from "./melody-fingering.js?v=167";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=167";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -4234,6 +4234,9 @@ async function adoptServiceLibrary() {
   saveRepertoire({ skipServerSave: true });
   renderRepertoire();
   updateSelectedSongPanel();
+  // The chart is drawn once at startup, before these songs existed. Without
+  // this it stays on whatever it drew for an empty repertoire.
+  if (state.tool === "chart") renderTool();
   setPipeStatus(`Vraćeno sa servisa: ${added} ${added === 1 ? "pesma" : "pesme"}.`);
   return true;
 }
@@ -4242,6 +4245,27 @@ function deleteSong(songId) {
   const index = state.repertoire.findIndex((song) => song.id === songId);
   if (index < 0) return;
   const removed = state.repertoire[index];
+
+  // Removing a song throws away work that took minutes to produce, and for a
+  // recorded song the audio itself cannot be obtained again. Name what is
+  // about to go, and ask.
+  const chordCount = (removed?.chords || []).length;
+  const noteCount = Object.values(removed?.noteTracks || {})
+    .reduce((total, track) => total + ((track?.events || []).length), 0);
+  const parts = [];
+  if (chordCount) parts.push(`${chordCount} akorda`);
+  if (noteCount) parts.push(`${noteCount} prepoznatih tonova`);
+  if ((removed?.availableStems || []).length) parts.push(`${removed.availableStems.length} razdvojenih kanala`);
+  const isRecording = Boolean(removed?.localCapture?.available);
+  const warning = isRecording
+    ? "\n\nOvo je snimak sa YouTube-a — ako ga obrišeš, snimanje mora ponovo."
+    : "";
+  const detail = parts.length ? `\n\nGubi se: ${parts.join(", ")}.` : "";
+  const confirmed = window.confirm(
+    `Obrisati "${removed?.title || songId}" iz repertoara?${detail}${warning}`
+      + "\n\nObrada se sklanja u korpu na servisu, pa se može vratiti ručno."
+  );
+  if (!confirmed) return;
   const poll = processingPolls.get(songId);
   if (poll?.cancel) poll.cancel("song-deleted");
   processingPolls.delete(songId);

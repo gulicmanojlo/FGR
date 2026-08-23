@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=166";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=167";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=166";
+} from "./practice-timing.js?v=167";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=166";
+} from "./chord-editor.js?v=167";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -1771,7 +1771,23 @@ export function renderTool() {
   if (state.tool !== "vezba") {
     setMidiOnChordCallback(null);
   }
-  TOOLS[state.tool]();
+  try {
+    TOOLS[state.tool]();
+  } catch (error) {
+    // A blank panel is the worst possible report: it looks identical to "no
+    // data", to "not loaded yet" and to "this feature does nothing", and it
+    // sent us chasing the wrong bug for hours. Show the failure instead.
+    const message = String(error && error.message ? error.message : error);
+    console.error("Panel se nije iscrtao:", error);
+    toolBody.innerHTML =
+      '<div class="tool-render-error">'
+      + '<strong>Ovaj panel se nije iscrtao.</strong>'
+      + '<div class="tool-render-error-detail"></div>'
+      + '<small>Greška je zapisana u konzoli. Izaberi drugu pesmu ili osveži stranicu.</small>'
+      + '</div>';
+    const detail = toolBody.querySelector(".tool-render-error-detail");
+    if (detail) detail.textContent = message;
+  }
 }
 
 export function selectTool(name) {

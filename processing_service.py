@@ -1920,13 +1920,28 @@ class SongStore:
         return songs
 
     def delete_song(self, song_id: str) -> bool:
-        """Remove one song and everything separated or analysed for it."""
+        """Retire one song into the trash folder.
+
+        Not a real delete. Separation takes minutes and a capture cannot be
+        recorded twice, so an accidental click must stay recoverable: the song
+        moves aside, keeping its name and a timestamp, and can be moved back by
+        hand. Reclaiming the disk is a separate, deliberate act.
+        """
 
         directory = self._song_dir(song_id)
         with self._lock:
             if not directory.exists():
                 return False
-            shutil.rmtree(directory, ignore_errors=True)
+            trash = self.root / "trash"
+            trash.mkdir(parents=True, exist_ok=True)
+            stamp = utc_now().replace(":", "-").replace(".", "-")
+            target = trash / f"{song_id}__{stamp}"
+            try:
+                directory.rename(target)
+            except OSError:
+                # A locked file must not turn a delete into a half-deleted song.
+                shutil.copytree(directory, target, dirs_exist_ok=True)
+                shutil.rmtree(directory, ignore_errors=True)
             return not directory.exists()
 
     def _song_dir(self, song_id: str) -> Path:
