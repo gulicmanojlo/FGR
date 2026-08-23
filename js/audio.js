@@ -1,5 +1,5 @@
 import { state, NOTE_NAMES, clamp } from "./state.js";
-import { CHANNEL_NAMES, createChannelBuses, scheduleSampleVoice } from "./piano-voice.js?v=159";
+import { CHANNEL_NAMES, createChannelBuses, scheduleSampleVoice } from "./piano-voice.js?v=160";
 import { getKeyboardChord, getMouseChord, getMobileChord } from "./keyboard.js";
 import {
   buildChordTimeline,
@@ -7,7 +7,7 @@ import {
   detectChordFromChroma,
   parseKeySignature,
   refineChordBoundaries
-} from "./chord-analysis.js?v=159";
+} from "./chord-analysis.js?v=160";
 
 // Semplovi i preseti instrumenata
 const PIANO_SAMPLE_BASE_PATH = "samples/piano/";
@@ -991,6 +991,13 @@ export const rec = {
   seekGeneration: 0
 };
 
+function fetchStemWithLegacyFallback(url) {
+  return fetch(url).then((response) => {
+    if (response.ok || !url.endsWith(".wav")) return response;
+    return fetch(url.slice(0, -4) + ".mp3").then((legacy) => (legacy.ok ? legacy : response));
+  });
+}
+
 export function recRate() {
   return state.playbackRate;
 }
@@ -1000,7 +1007,10 @@ export function recTime() {
   // While pitch compensation is active every channel is aligned to the
   // shifter's mean output latency. Keep the playhead on audible audio rather
   // than letting it run ahead during that short DSP pre-roll.
-  const audibleElapsed = Math.max(0, rec.ctx.currentTime - rec.startedAt);
+  const deviceLatency = typeof rec.ctx.outputLatency === "number" && Number.isFinite(rec.ctx.outputLatency)
+    ? rec.ctx.outputLatency
+    : 0;
+  const audibleElapsed = Math.max(0, rec.ctx.currentTime - rec.startedAt - deviceLatency);
   return rec.offset + audibleElapsed * recRate();
 }
 
@@ -1443,8 +1453,8 @@ function loadStemRecording(ctx, id, song, generation) {
   const advertisedStems = new Set(Array.isArray(song.availableStems) ? song.availableStems : []);
   const requiredStems = advertisedStems.size ? advertisedStems : new Set(["bass", "drums", "vocals", "other"]);
   const promises = stemNames.map((name) => {
-    const url = getSongAssetUrl(song, name) || `samples/${song.id}/${name}.mp3`;
-    return fetch(url)
+    const url = getSongAssetUrl(song, name) || `samples/${song.id}/${name}.wav`;
+    return fetchStemWithLegacyFallback(url)
       .then((response) => {
         if (!response.ok) {
           if (requiredStems.has(name)) throw new Error(`Failed to fetch stem: ${name}`);

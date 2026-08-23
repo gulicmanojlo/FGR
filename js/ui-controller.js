@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=159";
+} from "./audio.js?v=160";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=159";
+} from "./processing-client.js?v=160";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=159";
+} from "./chord-analysis.js?v=160";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=159";
+} from "./practice-timing.js?v=160";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,24 +69,24 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=159";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=159";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=159";
-import { createPcmWavFile } from "./pcm-wav.js?v=159";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=159";
-import { resolveMixerControls } from "./mixer-routing.js?v=159";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=159";
-import { createScorePlayer } from "./score-player.js?v=159";
-import { renderHarmonyEvents } from "./voicing.js?v=159";
+} from "./preferences.js?v=160";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=160";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=160";
+import { createPcmWavFile } from "./pcm-wav.js?v=160";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=160";
+import { resolveMixerControls } from "./mixer-routing.js?v=160";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=160";
+import { createScorePlayer } from "./score-player.js?v=160";
+import { renderHarmonyEvents } from "./voicing.js?v=160";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=159";
+} from "./audio-import.js?v=160";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=159";
+} from "./pcm-capture.js?v=160";
 
 import { 
   handleKeyDown, 
@@ -128,10 +128,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=159";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=159";
-import { computeMelodyFingering } from "./melody-fingering.js?v=159";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=159";
+} from "./ui-tools.js?v=160";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=160";
+import { computeMelodyFingering } from "./melody-fingering.js?v=160";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=160";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -5367,10 +5367,29 @@ function stopLegacyCapture() {
   }
 }
 
-async function finalizePcmCapture(songId, audioBuffer) {
+// Above this share of missing audio the take is not worth analysing. One of
+// the two captures found on disk had lost 1.2% of the song in about a thousand
+// separate gaps and passed every check the app had, because the only test was
+// for silence. Beats, chords and note timing are all derived from this audio,
+// so a damaged take produces confidently wrong analysis.
+const MAX_CAPTURE_DROPOUT_RATIO = 0.003;
+
+async function finalizePcmCapture(songId, audioBuffer, integrity = null) {
   const song = state.repertoire.find((entry) => entry.id === songId);
   if (!song || !audioBuffer || audioBuffer.duration < 3) {
     setPipeStatus("Snimak je prekratak i nije sačuvan.");
+    return;
+  }
+  const droppedRatio = Number(integrity?.droppedRatio) || 0;
+  if (droppedRatio > MAX_CAPTURE_DROPOUT_RATIO) {
+    const lost = (Number(integrity?.droppedSeconds) || 0).toFixed(1);
+    song.processing = createProcessingStatus(
+      "failed",
+      "source",
+      `Snimanje je izgubilo ${lost} s zvuka (${(droppedRatio * 100).toFixed(1)}%). `
+        + "Zatvori nepotrebne tabove i programe pa snimi ponovo — od ovakvog snimka analiza ne može da bude tačna."
+    );
+    persistProcessingUpdate(song);
     return;
   }
   const signal = audioBufferSignalStats(audioBuffer);
@@ -5551,12 +5570,13 @@ async function stopCapture() {
 
   capStopping = (async () => {
     const audioBuffer = recorder?.state === "recording" ? await recorder.stop() : null;
+    const integrity = typeof recorder?.captureIntegrity === "function" ? recorder.captureIntegrity() : null;
     capStream?.getTracks().forEach((track) => track.stop());
     capStream = null;
     capRec = null;
     capSongId = "";
     capAwaitingPlayback = false;
-    if (audioBuffer) await finalizePcmCapture(songId, audioBuffer);
+    if (audioBuffer) await finalizePcmCapture(songId, audioBuffer, integrity);
   })().catch((error) => {
     setPipeStatus("Greška pri WAV snimanju: " + (error?.message || error));
   }).finally(() => {
@@ -5686,7 +5706,7 @@ async function analyzeSongChords(song, options = {}) {
 
 function loadAnalysisStem(actx, song, stemName) {
   const asset = song?.assets?.stems?.[stemName];
-  const url = typeof asset === "string" ? asset : asset?.url || `samples/${song.id}/${stemName}.mp3`;
+  const url = typeof asset === "string" ? asset : asset?.url || `samples/${song.id}/${stemName}.wav`;
   return fetch(url)
     .then((response) => response.ok ? response.arrayBuffer() : null)
     .then((data) => data ? actx.decodeAudioData(data) : null)

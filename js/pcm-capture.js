@@ -46,7 +46,7 @@ export async function createPcmTabRecorder(audioStream, options = {}) {
   }
 
   await context.audioWorklet.addModule(
-    new URL("./pcm-capture-worklet.js?v=159", import.meta.url).href
+    new URL("./pcm-capture-worklet.js?v=160", import.meta.url).href
   );
 
   const source = context.createMediaStreamSource(audioStream);
@@ -63,6 +63,11 @@ export async function createPcmTabRecorder(audioStream, options = {}) {
   silentOutput.gain.value = 0;
   const chunks = Array.from({ length: channels }, () => []);
   let frameCount = 0;
+  // Frames the browser never delivered. The worklet fills them with silence so
+  // the recording keeps real time; this is the count that says how much of the
+  // song is missing, which the old code had no way of knowing.
+  let droppedFrames = 0;
+  let dropoutCount = 0;
 
   const recorder = {
     state: "recording",
@@ -71,7 +76,20 @@ export async function createPcmTabRecorder(audioStream, options = {}) {
       if (this.state !== "recording") return;
       chunks.forEach((channelChunks) => { channelChunks.length = 0; });
       frameCount = 0;
+      droppedFrames = 0;
+      dropoutCount = 0;
       worklet.port.postMessage({ type: "reset" });
+    },
+    captureIntegrity() {
+      const rate = context.sampleRate || 48000;
+      const total = frameCount || 1;
+      return {
+        droppedFrames,
+        dropoutCount,
+        droppedSeconds: droppedFrames / rate,
+        droppedRatio: droppedFrames / total,
+        recordedSeconds: frameCount / rate
+      };
     },
     async stop() {
       if (this.state !== "recording") return null;
@@ -113,9 +131,12 @@ export async function createPcmTabRecorder(audioStream, options = {}) {
         if (chunk) chunks[channel].push(chunk);
       }
       frameCount += frames;
+      droppedFrames = Math.max(droppedFrames, Number(event.data.droppedFrames) || 0);
       return;
     }
     if (event.data?.type === "stopped") {
+      droppedFrames = Math.max(droppedFrames, Number(event.data.droppedFrames) || 0);
+      dropoutCount = Math.max(dropoutCount, Number(event.data.dropoutCount) || 0);
       worklet.__fgrResolveStop?.();
       delete worklet.__fgrResolveStop;
     }
