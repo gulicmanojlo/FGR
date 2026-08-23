@@ -75,7 +75,7 @@ assert.deepEqual(computeMelodyFingering(null), []);
 // prst 1-5, bez tehnički nemogućih prelaza unutar fraze.
 const { readFile } = await import("node:fs/promises");
 const demoPayload = JSON.parse(
-  await readFile(new URL("../samples/luis-sve-se-osim-tuge-deli/note-tracks.json", import.meta.url), "utf8")
+  await readFile(new URL("./fixtures/note-tracks.json", import.meta.url), "utf8")
 );
 const demoTracks = demoPayload.noteTracks || demoPayload;
 for (const [name, hand] of [["melody", "right"], ["bass", "left"]]) {

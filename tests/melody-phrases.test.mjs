@@ -71,7 +71,7 @@ assert.equal(phraseIndexAtTime([], 1), -1);
 // Realni podaci demo pesme: fraze pokrivaju sve eventove bez preklapanja.
 const { readFile } = await import("node:fs/promises");
 const payload = JSON.parse(
-  await readFile(new URL("../samples/luis-sve-se-osim-tuge-deli/note-tracks.json", import.meta.url), "utf8")
+  await readFile(new URL("./fixtures/note-tracks.json", import.meta.url), "utf8")
 );
 const demoEvents = (payload.noteTracks || payload).melody?.events || [];
 if (demoEvents.length) {

@@ -1877,6 +1877,67 @@ class SongStore:
         self._lock = threading.RLock()
         self.recover_interrupted_jobs()
 
+    def _playlists_dir(self) -> Path:
+        directory = self.root / "playlists"
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
+    @staticmethod
+    def _playlist_name(name: str) -> str:
+        cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "-", str(name or "")).strip("-.")
+        if not cleaned or len(cleaned) > 80:
+            raise APIError(HTTPStatus.BAD_REQUEST, "invalid_playlist", "Playlist name is not usable.")
+        return cleaned.lower()
+
+    def list_playlists(self) -> list[dict[str, Any]]:
+        playlists: list[dict[str, Any]] = []
+        for path in sorted(self._playlists_dir().glob("*.json")):
+            try:
+                with open(path, encoding="utf-8") as handle:
+                    data = json.load(handle)
+            except (OSError, ValueError):
+                continue
+            playlists.append(
+                {
+                    "name": data.get("name") or path.stem,
+                    "slug": path.stem,
+                    "songCount": len(data.get("songs") or []),
+                    "updatedAt": data.get("updatedAt"),
+                }
+            )
+        return playlists
+
+    def read_playlist(self, name: str) -> dict[str, Any]:
+        path = self._playlists_dir() / f"{self._playlist_name(name)}.json"
+        if not path.is_file():
+            raise APIError(HTTPStatus.NOT_FOUND, "not_found", "Playlist not found.")
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def write_playlist(self, name: str, data: Any) -> dict[str, Any]:
+        if not isinstance(data, Mapping):
+            raise APIError(HTTPStatus.BAD_REQUEST, "invalid_playlist", "Playlist must be an object.")
+        slug = self._playlist_name(name)
+        path = self._playlists_dir() / f"{slug}.json"
+        payload = dict(data)
+        payload.setdefault("version", 1)
+        payload["name"] = payload.get("name") or name
+        payload["updatedAt"] = utc_now()
+        with self._lock:
+            temporary = path.with_suffix(".json.tmp")
+            with open(temporary, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, ensure_ascii=False, indent=2)
+            os.replace(temporary, path)
+        return {"name": payload["name"], "slug": slug, "updatedAt": payload["updatedAt"]}
+
+    def delete_playlist(self, name: str) -> bool:
+        path = self._playlists_dir() / f"{self._playlist_name(name)}.json"
+        with self._lock:
+            if not path.is_file():
+                return False
+            path.unlink()
+            return True
+
     def list_songs(self) -> list[dict[str, Any]]:
         """Summarise every song this service has on disk."""
 
@@ -3160,6 +3221,10 @@ class FGRRequestHandler(BaseHTTPRequestHandler):
 
     def _delete(self) -> None:
         segments = self._segments()
+        if len(segments) == 3 and segments[:2] == ["v1", "playlists"]:
+            removed = self.app.store.delete_playlist(segments[2])
+            self._send_json(HTTPStatus.OK, {"slug": segments[2], "removed": removed})
+            return
         if len(segments) != 3 or segments[:2] != ["v1", "songs"]:
             raise APIError(HTTPStatus.NOT_FOUND, "not_found", "Endpoint not found.")
         song_id = validate_song_id(segments[2])
@@ -3169,7 +3234,7 @@ class FGRRequestHandler(BaseHTTPRequestHandler):
     def _options(self) -> None:
         self.send_response(HTTPStatus.NO_CONTENT)
         self._cors_headers()
-        self.send_header("Access-Control-Allow-Methods", "GET, HEAD, POST, PATCH, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Accept, Content-Type, Range")
         self.send_header("Access-Control-Max-Age", "600")
         self.send_header("Content-Length", "0")
@@ -3185,6 +3250,17 @@ class FGRRequestHandler(BaseHTTPRequestHandler):
         except OSError:
             pass
         self._send_json(HTTPStatus.OK, {"received": True})
+
+    def do_PUT(self) -> None:
+        self._dispatch(self._put)
+
+    def _put(self) -> None:
+        segments = self._segments()
+        if len(segments) == 3 and segments[:2] == ["v1", "playlists"]:
+            payload = self._read_json()
+            self._send_json(HTTPStatus.OK, self.app.store.write_playlist(segments[2], payload))
+            return
+        raise APIError(HTTPStatus.NOT_FOUND, "not_found", "Endpoint not found.")
 
     def _post(self) -> None:
         if self._segments() == ["v1", "diagnostics"]:
@@ -3280,6 +3356,12 @@ class FGRRequestHandler(BaseHTTPRequestHandler):
             return
         if segments == ["v1", "songs"]:
             self._send_json(HTTPStatus.OK, {"songs": self.app.store.list_songs()}, head_only=head_only)
+            return
+        if segments == ["v1", "playlists"]:
+            self._send_json(HTTPStatus.OK, {"playlists": self.app.store.list_playlists()}, head_only=head_only)
+            return
+        if len(segments) == 3 and segments[:2] == ["v1", "playlists"]:
+            self._send_json(HTTPStatus.OK, self.app.store.read_playlist(segments[2]), head_only=head_only)
             return
         segments, song_id = self._route_song()
         endpoint = segments[3]

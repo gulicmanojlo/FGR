@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=169";
+} from "./audio.js?v=170";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=169";
+} from "./processing-client.js?v=170";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=169";
+} from "./chord-analysis.js?v=170";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=169";
+} from "./practice-timing.js?v=170";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,24 +69,31 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=169";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=169";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=169";
-import { createPcmWavFile } from "./pcm-wav.js?v=169";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=169";
-import { resolveMixerControls } from "./mixer-routing.js?v=169";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=169";
-import { createScorePlayer } from "./score-player.js?v=169";
-import { renderHarmonyEvents } from "./voicing.js?v=169";
+} from "./preferences.js?v=170";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=170";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=170";
+import { createPcmWavFile } from "./pcm-wav.js?v=170";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=170";
+import { resolveMixerControls } from "./mixer-routing.js?v=170";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=170";
+import { createScorePlayer } from "./score-player.js?v=170";
+import {
+  deleteLocalPlaylist,
+  fetchLocalPlaylists,
+  loadLocalPlaylist,
+  playlistSlug,
+  saveLocalPlaylist
+} from "./playlists.js?v=170";
+import { renderHarmonyEvents } from "./voicing.js?v=170";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=169";
+} from "./audio-import.js?v=170";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=169";
+} from "./pcm-capture.js?v=170";
 
 import { 
   handleKeyDown, 
@@ -102,14 +109,10 @@ import {
 import { connectMidi, detectMidiChord, midiHeld } from "./midi.js";
 
 import { 
-  fetchServerPlaylists, 
-  putGitHubFile, 
-  fetchGitHubFileMetadata, 
   slugifyPlaylistName, 
   buildRepertoireFileData, 
   normalizeRepertoireFileData,
-  getGitHubToken,
-  ensureGitHubToken
+  getGitHubToken
 } from "./github.js";
 
 import { 
@@ -128,10 +131,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=169";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=169";
-import { computeMelodyFingering } from "./melody-fingering.js?v=169";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=169";
+} from "./ui-tools.js?v=170";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=170";
+import { computeMelodyFingering } from "./melody-fingering.js?v=170";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=170";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -2870,10 +2873,6 @@ function savePlayerSettings() {
 
 function scheduleServerPlaylistSave(delay = 700) {
   if (!state.activePlaylistPath) return;
-  if (!getGitHubToken()) {
-    setYouTubeStatus("GitHub token je potreban");
-    return;
-  }
   if (state.playlistSaveTimer) {
     window.clearTimeout(state.playlistSaveTimer);
   }
@@ -2895,21 +2894,13 @@ async function saveActivePlaylistToServer(options = {}) {
   setYouTubeStatus("Cuvanje playliste");
 
   try {
-    const result = await putGitHubFile(state.activePlaylistPath, buildRepertoireFileDataWithArtwork(), {
-      message: `Update playlist ${state.activePlaylistName || state.activePlaylistPath}`,
-      sha: state.activePlaylistSha
-    });
-    state.activePlaylistSha = result.content?.sha || state.activePlaylistSha;
+    await saveLocalPlaylist(state.activePlaylistPath, buildRepertoireFileDataWithArtwork());
     saveRepertoire({ skipServerSave: true });
     setYouTubeStatus("Playlist sacuvana");
-  } catch (error) {
-    if (!options.retry && (error?.status === 409 || error?.status === 422 || error?.status === 404)) {
-      const metadata = await fetchGitHubFileMetadata(state.activePlaylistPath);
-      state.activePlaylistSha = metadata.sha || "";
-      state.playlistSaveInFlight = false;
-      return await saveActivePlaylistToServer({ retry: true });
-    }
-    setYouTubeStatus(error?.status === 401 ? "GitHub token nije dobar" : "Playlist nije sacuvana");
+  } catch (_error) {
+    // Writing to a file on this machine either works or the service is down;
+    // there is no remote revision to reconcile any more.
+    setYouTubeStatus("Playlist nije sacuvana — proveri da li servis radi");
   } finally {
     state.playlistSaveInFlight = false;
     if (state.playlistDirtyAfterSave) {
@@ -2932,7 +2923,7 @@ async function openPlaylistBrowser() {
   setYouTubeStatus("Ucitavanje playlisti");
 
   try {
-    state.availablePlaylists = await fetchServerPlaylists();
+    state.availablePlaylists = await fetchLocalPlaylists();
     renderPlaylistBrowser();
     setYouTubeStatus(state.availablePlaylists.length ? "Playlists ucitane" : "Nema playlisti");
   } catch {
@@ -2970,17 +2961,13 @@ function renderPlaylistBrowser() {
 async function loadPlaylistFromServer(playlist) {
   setYouTubeStatus("Ucitavanje playliste");
   try {
-    const response = await fetch(`${playlist.url}?cache=${Date.now()}`, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error("Playlist nije ucitana");
-    }
-    const rawData = await response.json();
+    const rawData = await loadLocalPlaylist(playlist.slug || playlistSlug(playlist.name));
     const data = normalizeRepertoireFileData(rawData);
-    
+
     // Primeni playlistu
     state.activePlaylistName = data.name || playlist.name;
-    state.activePlaylistPath = playlist.path;
-    state.activePlaylistSha = playlist.sha;
+    state.activePlaylistPath = playlist.slug || playlistSlug(playlist.name);
+    state.activePlaylistSha = "";
     state.repertoire = restoreSongArtwork(rawData, data.songs);
     state.selectedSongId = state.repertoire.some((song) => song.id === data.selectedSongId)
       ? data.selectedSongId
@@ -3020,38 +3007,26 @@ function openNewPlaylistDialog() {
       <span>Ime playliste</span>
       <input id="newPlaylistNameInput" class="sheet-input" type="text" autocomplete="off" required>
     </label>
-    <label class="stacked-field">
-      <span>GitHub token</span>
-      <input id="githubTokenInput" class="sheet-input" type="password" autocomplete="off" placeholder="fine-grained token">
-    </label>
     <button class="text-button primary-button" type="submit">Napravi</button>
   `;
   playlistBrowser.append(form);
 
-  const tokenInput = form.querySelector("#githubTokenInput");
-  tokenInput.value = getGitHubToken();
   form.querySelector("#newPlaylistNameInput").focus();
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    createNewPlaylistOnServer(
-      form.querySelector("#newPlaylistNameInput").value,
-      tokenInput.value
-    );
+    createNewPlaylistOnServer(form.querySelector("#newPlaylistNameInput").value);
   });
 }
 
-async function createNewPlaylistOnServer(name, token) {
+async function createNewPlaylistOnServer(name) {
   const normalizedName = String(name || "").trim();
   if (!normalizedName) return;
 
-  const normalizedToken = String(token || "").trim();
-  if (!normalizedToken) {
-    setYouTubeStatus("GitHub token je potreban");
+  const path = playlistSlug(normalizedName);
+  if (!path) {
+    setYouTubeStatus("Ime playliste nije upotrebljivo");
     return;
   }
-  writeSessionValue(state.GITHUB_TOKEN_STORAGE_KEY, normalizedToken);
-
-  const path = `playlists/${slugifyPlaylistName(normalizedName)}.json`;
   const data = {
     version: 1,
     name: normalizedName,
@@ -3065,12 +3040,10 @@ async function createNewPlaylistOnServer(name, token) {
 
   setYouTubeStatus("Pravljenje playliste");
   try {
-    const result = await putGitHubFile(path, data, {
-      message: `Create playlist ${normalizedName}`
-    });
+    await saveLocalPlaylist(path, data);
     state.activePlaylistName = normalizedName;
     state.activePlaylistPath = path;
-    state.activePlaylistSha = result.content?.sha || "";
+    state.activePlaylistSha = "";
     state.repertoire = [];
     state.selectedSongId = null;
     saveRepertoire({ skipServerSave: true });
@@ -3080,7 +3053,7 @@ async function createNewPlaylistOnServer(name, token) {
     closePlaylistBrowser();
     setYouTubeStatus(`Playlist napravljena: ${normalizedName}`);
   } catch (error) {
-    setYouTubeStatus(error?.status === 422 ? "Playlist vec postoji" : "Playlist nije napravljena");
+    setYouTubeStatus("Playlist nije napravljena — proveri da li servis radi");
   }
 }
 

@@ -15,7 +15,7 @@ const {
   refineChordBoundaries
 } = await import(moduleUrl);
 
-const bundledPlaylist = JSON.parse(await readFile(new URL("../playlists/feelgood.json", import.meta.url), "utf8"));
+const bundledPlaylist = JSON.parse(await readFile(new URL("./fixtures/bundled-playlist.json", import.meta.url), "utf8"));
 const bundledLuis = bundledPlaylist.songs.find((song) => song.id === "luis-sve-se-osim-tuge-deli");
 assert.equal(bundledLuis.chordChartRevision, 2);
 assert.equal(bundledLuis.chords.length, 63);
