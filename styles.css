@@ -3968,12 +3968,21 @@ body:has(.workbench-v2) {
 /* Center column */
 .workbench-v2 .mcol {
   display: grid;
-  grid-template-rows: 216px 66px minmax(0, 1fr);
+  /* The middle row holds the analysis strip, which is hidden whenever nothing
+     is being processed. With rows filled by document order, hiding it made the
+     tool panel fall into the 66px row while the tall row sat empty — so the
+     chart was visible only while a song was still analysing, and vanished the
+     moment it finished. Each child is pinned to its own row instead. */
+  grid-template-rows: 216px auto minmax(0, 1fr);
   gap: 8px;
   min-height: 0;
   overflow: hidden;
   padding: 0;
 }
+
+.workbench-v2 .mcol > .toprow { grid-row: 1; }
+.workbench-v2 .mcol > .analysis-strip { grid-row: 2; }
+.workbench-v2 .mcol > .panel.tool { grid-row: 3; }
 
 .workbench-v2 .toprow { display: block; min-height: 0; }
 .workbench-v2 .now-card { display: none; }
@@ -5212,7 +5221,7 @@ body:has(.workbench-v2) {
     flex-basis: min(var(--piano-dock-height), 36dvh);
     height: min(var(--piano-dock-height), 36dvh);
   }
-  .workbench-v2 .mcol { grid-template-rows: 145px 58px minmax(0, 1fr); }
+  .workbench-v2 .mcol { grid-template-rows: 145px auto minmax(0, 1fr); }
   .workbench-v2 .studio-player { grid-template-columns: 125px minmax(0, 1fr) 120px; gap: 11px; }
   .workbench-v2 .yt-frame { width: 125px; height: 125px; }
   .workbench-v2 .tone-card { width: 120px; }
@@ -5263,7 +5272,7 @@ body:has(.workbench-v2) {
     overflow: visible;
   }
   .workbench-v2 .lcol { max-height: 340px; }
-  .workbench-v2 .mcol { min-height: 680px; grid-template-rows: 205px 120px minmax(340px, 1fr); overflow: visible; }
+  .workbench-v2 .mcol { min-height: 680px; grid-template-rows: 205px auto minmax(340px, 1fr); overflow: visible; }
   .workbench-v2 .studio-player { grid-template-columns: 104px minmax(0, 1fr); }
   .workbench-v2 .yt-frame { width: 104px; height: 104px; }
   .workbench-v2 .tone-card { display: none; }
