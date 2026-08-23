@@ -5458,3 +5458,71 @@ body:has(.workbench-v2) {
   font: 13px/1.5 system-ui, sans-serif;
   box-shadow: 0 12px 40px rgba(0, 0, 0, .45);
 }
+
+
+/* ---------------- CHART PREKO CELOG EKRANA ---------------- */
+/* Only what the work needs: the transport to move around the song, the
+   timeline being corrected, and the keyboard that plays back what is under
+   the playhead. */
+
+.chart-focus-toggle {
+  margin-left: 8px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.chart-focus-toggle:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.workbench-v2.chart-focus .lcol,
+.workbench-v2.chart-focus .rcol,
+.workbench-v2.chart-focus .now-card,
+.workbench-v2.chart-focus .yt-frame,
+.workbench-v2.chart-focus .tone-card,
+.workbench-v2.chart-focus .hero-song-meta,
+.workbench-v2.chart-focus .piano-settings-panel {
+  display: none;
+}
+
+.workbench-v2.chart-focus .work {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The player collapses to its title and controls; the waveform stays because
+   moving around the song is part of playing it. */
+.workbench-v2.chart-focus .studio-player {
+  display: block;
+  padding: 6px 10px;
+}
+
+.workbench-v2.chart-focus .toprow {
+  height: auto;
+}
+
+.workbench-v2.chart-focus .mcol {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.workbench-v2.chart-focus .hero-waveform {
+  height: 38px;
+}
+
+/* Every pixel the header keeps is a pixel the timeline loses. */
+.workbench-v2.chart-focus .studio-player .yt-side {
+  gap: 4px;
+}
+
+.workbench-v2.chart-focus .yt-title-row {
+  font-size: 15px;
+}
+
+.workbench-v2.chart-focus .dock {
+  padding-top: 4px;
+}

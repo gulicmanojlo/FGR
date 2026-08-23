@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=174";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=176";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=174";
+} from "./practice-timing.js?v=176";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=174";
+} from "./chord-editor.js?v=176";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -1670,6 +1670,7 @@ export const TOOLS = {
             '<button type="button" data-chart-zoom="in" aria-label="Uvećaj timeline">+</button>' +
           '</div>' +
           '<small>Ctrl + točkić</small>' +
+          '<button type="button" class="chart-focus-toggle" id="chartFocusToggle" title="Uvećaj chart preko celog ekrana (Esc za izlaz)">⛶ Ceo ekran</button>' +
         '</div>' +
         '<div class="chart-timeline-scroll">' +
           '<div class="chart-timeline" id="ccStrip" data-duration="' + duration + '" data-chord-end-time="' + chordEndTime + '" data-pixels-per-second="' + pixelsPerSecond + '" style="width:' + canvasWidth + 'px">' +

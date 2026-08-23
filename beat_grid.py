@@ -847,6 +847,52 @@ def derive_meter(beats: Sequence[float], downbeats: Sequence[float]) -> dict[str
     }
 
 
+def repair_beat_outliers(
+    beats: Sequence[float],
+    tolerance: float = 0.35,
+) -> tuple[list[float], int]:
+    """Remove beats that the song's own tempo rules out, and re-fill the gaps.
+
+    The tracker occasionally emits a beat a fraction of a beat after the last
+    one — on the demo song the shortest gap was 80 ms where the tempo says
+    520 ms. Musically that cannot happen, and on screen it is a grid line
+    standing next to another one, which is exactly what a player notices
+    first. A beat closer than ``tolerance`` of the median spacing is a
+    duplicate and goes; a gap near twice the spacing lost a beat, so one is put
+    back where the tempo says it belongs.
+
+    Returns the repaired grid and how many places were changed.
+    """
+
+    times = sorted(float(value) for value in beats)
+    if len(times) < 4:
+        return times, 0
+
+    spacings = sorted(times[index + 1] - times[index] for index in range(len(times) - 1))
+    median = spacings[len(spacings) // 2]
+    if median <= 0:
+        return times, 0
+
+    repaired: list[float] = [times[0]]
+    changes = 0
+    for time in times[1:]:
+        gap = time - repaired[-1]
+        if gap < median * tolerance:
+            # Two beats where the tempo allows one. Keep the earlier, which is
+            # the one the surrounding grid is already in step with.
+            changes += 1
+            continue
+        # A hole wide enough for beats that were never reported.
+        missing = int(round(gap / median)) - 1
+        if 0 < missing <= 3:
+            step = gap / (missing + 1)
+            for index in range(1, missing + 1):
+                repaired.append(round(repaired[-1] + step, 4))
+            changes += missing
+        repaired.append(time)
+    return repaired, changes
+
+
 def build_model_beat_grid(
     beats: Sequence[float],
     downbeats: Sequence[float],
@@ -962,6 +1008,7 @@ def detect_beat_grid(
     beats, downbeats = predictor(signal, MODEL_SAMPLE_RATE)
     beats = [float(value) for value in np.atleast_1d(beats)]
     downbeats = [float(value) for value in np.atleast_1d(downbeats)]
+    beats, repaired_count = repair_beat_outliers(beats)
     if len(beats) < options.minimum_beats:
         return build_model_beat_grid(
             [], [], source_stems=used_stems, algorithm="beat-this-v1", agreement=0.0, config=options
@@ -980,11 +1027,14 @@ def detect_beat_grid(
         # The grid stays usable; only its self-reported confidence is lost.
         agreement = 0.0
 
-    return build_model_beat_grid(
+    grid = build_model_beat_grid(
         beats,
         downbeats,
         source_stems=used_stems,
-        algorithm="beat-this-v1+perturbation-check",
+        algorithm="beat-this-v1+perturbation-check+outlier-repair",
         agreement=agreement,
         config=options,
     )
+    if isinstance(grid, dict) and isinstance(grid.get("qa"), dict):
+        grid["qa"]["repairedBeats"] = int(repaired_count)
+    return grid

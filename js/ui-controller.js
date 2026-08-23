@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=174";
+} from "./audio.js?v=176";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=174";
+} from "./processing-client.js?v=176";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=174";
+} from "./chord-analysis.js?v=176";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=174";
+} from "./practice-timing.js?v=176";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,31 +69,31 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=174";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=174";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=174";
-import { createPcmWavFile } from "./pcm-wav.js?v=174";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=174";
-import { resolveMixerControls } from "./mixer-routing.js?v=174";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=174";
-import { createScorePlayer } from "./score-player.js?v=174";
+} from "./preferences.js?v=176";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=176";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=176";
+import { createPcmWavFile } from "./pcm-wav.js?v=176";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=176";
+import { resolveMixerControls } from "./mixer-routing.js?v=176";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=176";
+import { createScorePlayer } from "./score-player.js?v=176";
 import {
   deleteLocalPlaylist,
   fetchLocalPlaylists,
   loadLocalPlaylist,
   playlistSlug,
   saveLocalPlaylist
-} from "./playlists.js?v=174";
-import { renderHarmonyEvents } from "./voicing.js?v=174";
+} from "./playlists.js?v=176";
+import { renderHarmonyEvents } from "./voicing.js?v=176";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=174";
+} from "./audio-import.js?v=176";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=174";
+} from "./pcm-capture.js?v=176";
 
 import { 
   handleKeyDown, 
@@ -131,10 +131,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=174";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=174";
-import { computeMelodyFingering } from "./melody-fingering.js?v=174";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=174";
+} from "./ui-tools.js?v=176";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=176";
+import { computeMelodyFingering } from "./melody-fingering.js?v=176";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=176";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -6787,6 +6787,35 @@ async function checkBackendReachable() {
       "Servis za obradu nije pokrenut. Pokreni \u201ePokreni FGR\u201c \u2014 bez njega aplikacija radi iz kesa i ne vidi ni pesme ni izmene.";
   }
 }
+
+/**
+ * Chart across the whole window: transport above, keyboard below.
+ *
+ * Correcting chords by ear means reading a long timeline and clicking small
+ * targets on it. The default layout gives that panel about a third of the
+ * screen, with the repertoire, the mixer and the metronome taking room that
+ * the work actually needs.
+ */
+function toggleChartFocus(force) {
+  const app = document.getElementById("app");
+  if (!app) return;
+  const next = typeof force === "boolean" ? force : !app.classList.contains("chart-focus");
+  app.classList.toggle("chart-focus", next);
+  const button = document.getElementById("chartFocusToggle");
+  if (button) button.textContent = next ? "⤡ Smanji" : "⛶ Ceo ekran";
+  // The timeline sizes itself against the panel, so it has to be re-measured.
+  if (state.tool === "chart") renderTool();
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  const app = document.getElementById("app");
+  if (app?.classList.contains("chart-focus")) toggleChartFocus(false);
+});
+
+document.addEventListener("click", (event) => {
+  if (event.target?.closest?.("#chartFocusToggle")) toggleChartFocus();
+});
 
 // ---------------- POMOCNI PWA SERVISI ----------------
 function registerServiceWorker() {
