@@ -12,7 +12,7 @@
  * Sve je čisto i deterministički, pa se raspored može testirati bez zvuka.
  */
 
-import { beatPositionAt, hasUsableBeats, timeAtBeatPosition } from "./beat-grid.js?v=167";
+import { beatPositionAt, hasUsableBeats, timeAtBeatPosition } from "./beat-grid.js?v=168";
 
 const DEFAULT_CHORD_RANGE = [50, 76];
 const DEFAULT_BASS_RANGE = [28, 52];
@@ -323,14 +323,21 @@ export function renderHarmonyEvents(chords, grid, options = {}) {
     if (pulseOnly) {
       // Bas drži ceo akord, desna ruka ga obnavlja na svakoj dobi. Bez
       // naglaska na prvoj dobi, jer se ne zna gde je.
-      push(start, end - start, voiced.bass === null ? [] : [voiced.bass], 0.78);
-      const firstBeat = beatPositionAt(grid, start);
-      const lastBeat = beatPositionAt(grid, end);
-      if (firstBeat === null || lastBeat === null) {
+      const rawFirstBeat = beatPositionAt(grid, start);
+      const rawLastBeat = beatPositionAt(grid, end);
+      if (rawFirstBeat === null || rawLastBeat === null) {
+        push(start, end - start, voiced.bass === null ? [] : [voiced.bass], 0.78);
         push(start, end - start, voiced.chord, 0.58);
         return;
       }
-      for (let position = Math.ceil(firstBeat - 1e-6); position < lastBeat - 1e-6; position += 1) {
+      // Same reasoning as the bar-aligned branch: the pulse is trustworthy
+      // even when the bar line is not, so the chord still changes on a beat.
+      const snappedFirst = Math.round(rawFirstBeat);
+      const firstBeat = snappedFirst < rawLastBeat - 1e-6 ? snappedFirst : Math.ceil(rawFirstBeat - 1e-6);
+      const lastBeat = rawLastBeat;
+      const bassStart = timeAtBeatPosition(grid, firstBeat);
+      push(bassStart, end - bassStart, voiced.bass === null ? [] : [voiced.bass], 0.78);
+      for (let position = firstBeat; position < lastBeat - 1e-6; position += 1) {
         const time = Math.max(start, timeAtBeatPosition(grid, position));
         const stop = Math.min(end, timeAtBeatPosition(grid, position + 0.9));
         push(time, stop - time, voiced.chord, 0.54);
@@ -346,9 +353,23 @@ export function renderHarmonyEvents(chords, grid, options = {}) {
       return;
     }
 
-    const startPosition = beatPositionAt(grid, start);
-    const endPosition = beatPositionAt(grid, end);
-    if (startPosition === null || endPosition === null) return;
+    // A chord boundary deliberately sits where the harmony is heard, which is
+    // typically a little before the beat: bands push the change. That is right
+    // for the chart and wrong for the hands. Played literally, the first hit of
+    // the bar falls outside the segment, gets skipped, and the chord enters
+    // late or off the beat through the fallback below — which is exactly what
+    // "the chords are out of time" sounds like.
+    const rawStart = beatPositionAt(grid, start);
+    const rawEnd = beatPositionAt(grid, end);
+    if (rawStart === null || rawEnd === null) return;
+    // Only when there is room. A genuine off-beat passing chord — one that
+    // ends before the beat it would round to — has to keep its own time, or
+    // rounding would move it on top of the chord that follows it and silence
+    // one of the two.
+    const snappedStart = Math.round(rawStart);
+    const roomToSnap = snappedStart < rawEnd - 1e-6;
+    const startPosition = roomToSnap ? snappedStart : rawStart;
+    const endPosition = rawEnd;
     let arpCursor = 0;
     const firstBar = Math.floor((startPosition - grid.downbeatIndex) / beatsPerBar);
 

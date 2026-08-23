@@ -3175,7 +3175,21 @@ class FGRRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    def _post_diagnostics(self) -> None:
+        payload = self._read_json(allow_empty=True)
+        record = {"receivedAt": utc_now(), "report": payload}
+        path = self.app.store.root / "diagnostics.log"
+        try:
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except OSError:
+            pass
+        self._send_json(HTTPStatus.OK, {"received": True})
+
     def _post(self) -> None:
+        if self._segments() == ["v1", "diagnostics"]:
+            self._post_diagnostics()
+            return
         segments, song_id = self._route_song()
         if len(segments) != 4:
             raise APIError(HTTPStatus.NOT_FOUND, "not_found", "Endpoint not found.")

@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=167";
+} from "./audio.js?v=168";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=167";
+} from "./processing-client.js?v=168";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=167";
+} from "./chord-analysis.js?v=168";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=167";
+} from "./practice-timing.js?v=168";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,24 +69,24 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=167";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=167";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=167";
-import { createPcmWavFile } from "./pcm-wav.js?v=167";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=167";
-import { resolveMixerControls } from "./mixer-routing.js?v=167";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=167";
-import { createScorePlayer } from "./score-player.js?v=167";
-import { renderHarmonyEvents } from "./voicing.js?v=167";
+} from "./preferences.js?v=168";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=168";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=168";
+import { createPcmWavFile } from "./pcm-wav.js?v=168";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=168";
+import { resolveMixerControls } from "./mixer-routing.js?v=168";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=168";
+import { createScorePlayer } from "./score-player.js?v=168";
+import { renderHarmonyEvents } from "./voicing.js?v=168";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=167";
+} from "./audio-import.js?v=168";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=167";
+} from "./pcm-capture.js?v=168";
 
 import { 
   handleKeyDown, 
@@ -128,10 +128,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=167";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=167";
-import { computeMelodyFingering } from "./melody-fingering.js?v=167";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=167";
+} from "./ui-tools.js?v=168";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=168";
+import { computeMelodyFingering } from "./melody-fingering.js?v=168";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=168";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -1221,6 +1221,7 @@ async function init() {
   
   // Ucitavanje alata
   renderTool();
+  window.setTimeout(() => reportRenderState("startup"), 6000);
   
   // Probno inicijalizovanje zvuka
   try {
@@ -6722,6 +6723,65 @@ function trackPlaybackAndHighlight() {
     updatePracticeFollowHighlight(false);
   }
 }
+// A short description of what this browser ended up with, sent to the local
+// service so a fault can be read instead of guessed. It has taken hours to
+// learn that an empty area on a screenshot can mean four different things.
+// Local only: it goes to the service on this machine and nowhere else.
+function reportRenderState(reason) {
+  try {
+    if (!processingClient?.configured) return;
+    const song = getSelectedSong();
+    const strip = document.getElementById("ccStrip");
+    const body = document.getElementById("toolBody");
+    const rect = strip ? strip.getBoundingClientRect() : null;
+    const report = {
+      reason,
+      build: document.getElementById("fgrBuildTag")?.textContent || "",
+      tool: state.tool,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      songs: state.repertoire.map((entry) => ({
+        id: entry.id,
+        chords: (entry.chords || []).length,
+        stems: (entry.availableStems || []).length,
+        notes: Object.fromEntries(
+          Object.entries(entry.noteTracks || {}).map(([name, track]) => [name, (track?.events || []).length])
+        ),
+        processing: entry.processing?.state || ""
+      })),
+      selected: song?.id || null,
+      toolBodyChars: body ? body.innerHTML.length : -1,
+      strip: strip
+        ? {
+            chords: strip.querySelectorAll(".cc").length,
+            melody: strip.querySelectorAll(".chart-line-melody .chart-note").length,
+            bass: strip.querySelectorAll(".chart-line-bass .chart-note").length,
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+            visible: rect.height > 0 && rect.width > 0
+          }
+        : null,
+      renderError: body?.querySelector(".tool-render-error-detail")?.textContent || null,
+      lastError: window.__fgrLastError || null
+    };
+    fetch(resolveDiagnosticsUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(report)
+    }).catch(() => {});
+  } catch (_error) {
+    // Diagnostics must never be the thing that breaks the page.
+  }
+}
+
+function resolveDiagnosticsUrl() {
+  const base = String(processingClient?.baseUrl || "").replace(/\/+$/, "");
+  return `${base}/v1/diagnostics`;
+}
+
+window.addEventListener("error", (event) => {
+  window.__fgrLastError = String(event?.message || "") + " @ " + String(event?.filename || "") + ":" + String(event?.lineno || "");
+});
+
 // ---------------- POMOCNI PWA SERVISI ----------------
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;

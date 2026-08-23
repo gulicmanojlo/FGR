@@ -4464,7 +4464,9 @@ body:has(.workbench-v2) {
   height: auto;
   min-height: 0;
   overflow-x: auto;
-  overflow-y: hidden;
+  /* The strip is taller than this window once melody and bass are drawn.
+     Hiding the overflow silently cut both lanes off. */
+  overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
