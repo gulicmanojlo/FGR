@@ -1,7 +1,29 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi } from "./audio.js";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=170";
+import {
+  buildCountInPattern,
+  buildMetronomePattern,
+  beatAccentLevel,
+  normalizeTimelineZoom,
+  stepTimelineZoom,
+  TIMELINE_ZOOM_DEFAULT,
+  timelineSecondsFromClientX,
+  timelineTickSeconds,
+  timelineZoomScrollLeft
+} from "./practice-timing.js?v=170";
+import {
+  chordPreviewMidis,
+  chordSegmentGeometry,
+  editChordSegment,
+  openChordPicker,
+  resolveChordEndTime,
+  showChordContextMenu,
+  showTimelineContextMenu,
+  splitChordSegment
+} from "./chord-editor.js?v=170";
 
+const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
 const SUFFIX = { maj: "", min: "m", dim: "°" };
 const CHORD_VARIANTS = {
@@ -51,6 +73,13 @@ export function fmtTime(s) {
   return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 }
 
+export function fmtChordTime(value) {
+  const secondsTotal = Math.max(0, Math.round((Number(value) || 0) * 10) / 10);
+  const minutes = Math.floor(secondsTotal / 60);
+  const seconds = secondsTotal - minutes * 60;
+  return `${minutes}:${seconds.toFixed(1).padStart(4, "0")}`;
+}
+
 export function parseKey(text) {
   var raw = String(text || "").trim();
   if (!raw) return null;
@@ -81,6 +110,68 @@ export function formatKey(pc, minor) {
 
 export function selectedOctave() {
   return state.baseOctave;
+}
+
+function renderNoteLane(lane, song, trackName, pixelsPerSecond) {
+  if (!lane) return;
+  var track = (song && song.noteTracks && song.noteTracks[trackName]) || null;
+  var events = track && Array.isArray(track.events) ? track.events : [];
+  if (!events.length) {
+    lane.classList.add("is-empty");
+    return;
+  }
+  lane.classList.remove("is-empty");
+
+  // Height carries the pitch, so the shape of the line is readable at any zoom.
+  // Writing every note name instead would be unreadable at normal zoom: a
+  // typical note is a fifth of a second, which is five pixels wide.
+  var lowest = Infinity;
+  var highest = -Infinity;
+  for (var scan = 0; scan < events.length; scan += 1) {
+    var pitch = Number(events[scan].midi);
+    if (!isFinite(pitch)) continue;
+    if (pitch < lowest) lowest = pitch;
+    if (pitch > highest) highest = pitch;
+  }
+  if (!isFinite(lowest)) return;
+  var span = Math.max(1, highest - lowest);
+  var names = ["C", "Cis", "D", "Dis", "E", "F", "Fis", "G", "Gis", "A", "B", "H"];
+  var topPadding = 15;
+  var usableHeight = 22;
+  var noteHeight = 7;
+
+  var fragment = document.createDocumentFragment();
+  for (var index = 0; index < events.length; index += 1) {
+    var event = events[index];
+    var startSeconds = Number(event.t);
+    var durationSeconds = Number(event.d);
+    var midi = Number(event.midi);
+    if (!isFinite(startSeconds) || !isFinite(midi)) continue;
+    if (!isFinite(durationSeconds) || durationSeconds <= 0) durationSeconds = 0.15;
+
+    var width = Math.max(3, durationSeconds * pixelsPerSecond);
+    var note = document.createElement("span");
+    note.className = "chart-note";
+    note.style.left = (startSeconds * pixelsPerSecond) + "px";
+    note.style.width = width + "px";
+    note.style.top = (topPadding + (1 - (midi - lowest) / span) * usableHeight) + "px";
+    note.style.height = noteHeight + "px";
+    note.dataset.t = String(startSeconds);
+    note.dataset.midi = String(midi);
+    var name = names[((midi % 12) + 12) % 12];
+    // Only label a note that has room for the label; the rest are read by
+    // position, and by the piano at the bottom.
+    if (width >= 20) {
+      note.textContent = name;
+      note.classList.add("has-name");
+      note.style.height = "12px";
+      note.style.lineHeight = "12px";
+    }
+    note.setAttribute("role", "listitem");
+    note.title = name + Math.floor(midi / 12 - 1) + " · " + fmtChordTime(startSeconds);
+    fragment.appendChild(note);
+  }
+  lane.appendChild(fragment);
 }
 
 function normalizePc(pc) {
@@ -250,127 +341,205 @@ export const metro = {
   bpm: 96,
   sig: "4/4",
   rhythm: "click",
+  subdivision: 1,
+  swingPercent: 66,
+  countInBars: 1,
   beatIndex: -1,
   stepIndex: -1,
   timer: null,
   audio: null,
-  taps: []
+  master: null,
+  noiseBuffer: null,
+  taps: [],
+  pattern: null,
+  countInPattern: null,
+  patternCursor: 0,
+  countInCursor: 0,
+  nextStepTime: 0,
+  visualTimers: []
 };
 
-// Proceduralni zvuk Kick bubnja
+const METRO_LOOKAHEAD_MS = 25;
+const METRO_SCHEDULE_AHEAD_SECONDS = 0.12;
+
+function ensureMetroAudio() {
+  if (!metro.audio) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    metro.audio = new AudioContext();
+  }
+  if (!metro.master) {
+    metro.master = metro.audio.createGain();
+    metro.master.gain.value = 0.72;
+    metro.master.connect(metro.audio.destination);
+  }
+  if (metro.audio.state === "suspended") metro.audio.resume();
+  return metro.audio;
+}
+
+function getMetroNoiseBuffer(audioContext) {
+  if (metro.noiseBuffer && metro.noiseBuffer.sampleRate === audioContext.sampleRate) return metro.noiseBuffer;
+  const buffer = audioContext.createBuffer(1, Math.round(audioContext.sampleRate * 0.35), audioContext.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let index = 0; index < data.length; index += 1) data[index] = Math.random() * 2 - 1;
+  metro.noiseBuffer = buffer;
+  return buffer;
+}
+
+function playClick(audioContext, time, sound) {
+  const accent = Number(sound.level) || 1;
+  const subdivision = !!sound.subdivision;
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = accent >= 1.8 ? "triangle" : "sine";
+  const startFrequency = accent >= 1.8 ? 1480 : (subdivision ? 690 : 990);
+  oscillator.frequency.setValueAtTime(startFrequency, time);
+  oscillator.frequency.exponentialRampToValueAtTime(startFrequency * 0.72, time + 0.038);
+  const peak = subdivision ? 0.055 : (accent >= 1.8 ? 0.23 : 0.14);
+  gain.gain.setValueAtTime(0.0001, Math.max(0, time - 0.002));
+  gain.gain.exponentialRampToValueAtTime(peak, time + 0.001);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + (subdivision ? 0.035 : 0.065));
+  oscillator.connect(gain);
+  gain.connect(metro.master);
+  oscillator.start(time);
+  oscillator.stop(time + 0.075);
+
+  if (!subdivision) {
+    const noise = audioContext.createBufferSource();
+    const filter = audioContext.createBiquadFilter();
+    const noiseGain = audioContext.createGain();
+    noise.buffer = getMetroNoiseBuffer(audioContext);
+    filter.type = "bandpass";
+    filter.frequency.value = accent >= 1.8 ? 2600 : 2100;
+    filter.Q.value = 1.8;
+    noiseGain.gain.setValueAtTime(accent >= 1.8 ? 0.045 : 0.025, time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.022);
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(metro.master);
+    noise.start(time);
+    noise.stop(time + 0.025);
+  }
+}
+
 function playKick(audioContext, time) {
   const osc = audioContext.createOscillator();
   const gain = audioContext.createGain();
   osc.connect(gain);
-  gain.connect(audioContext.destination);
+  gain.connect(metro.master);
 
-  osc.frequency.setValueAtTime(150, time);
-  osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.1);
+  osc.frequency.setValueAtTime(145, time);
+  osc.frequency.exponentialRampToValueAtTime(48, time + 0.11);
 
-  gain.gain.setValueAtTime(1.0, time);
-  gain.gain.exponentialRampToValueAtTime(0.01, time + 0.12);
+  gain.gain.setValueAtTime(0.72, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.14);
 
   osc.start(time);
-  osc.stop(time + 0.15);
+  osc.stop(time + 0.16);
 }
 
-// Proceduralni zvuk Snare bubnja
 function playSnare(audioContext, time, volume = 0.7) {
-  const bufferSize = audioContext.sampleRate * 0.15;
-  const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++) {
-    data[i] = Math.random() * 2 - 1;
-  }
-
   const noise = audioContext.createBufferSource();
-  noise.buffer = buffer;
+  noise.buffer = getMetroNoiseBuffer(audioContext);
 
   const filter = audioContext.createBiquadFilter();
   filter.type = "bandpass";
-  filter.frequency.value = 1000;
+  filter.frequency.value = 1450;
+  filter.Q.value = 0.8;
 
   const gain = audioContext.createGain();
-  gain.gain.setValueAtTime(volume, time);
-  gain.gain.exponentialRampToValueAtTime(0.005, time + 0.12);
+  gain.gain.setValueAtTime(volume * 0.52, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.11);
 
   noise.connect(filter);
   filter.connect(gain);
-  gain.connect(audioContext.destination);
+  gain.connect(metro.master);
 
-  // quick shell click
   const osc = audioContext.createOscillator();
   const oscGain = audioContext.createGain();
   osc.frequency.setValueAtTime(180, time);
-  oscGain.gain.setValueAtTime(volume * 0.4, time);
-  oscGain.gain.exponentialRampToValueAtTime(0.005, time + 0.08);
+  oscGain.gain.setValueAtTime(volume * 0.18, time);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, time + 0.07);
 
   osc.connect(oscGain);
-  oscGain.connect(audioContext.destination);
+  oscGain.connect(metro.master);
 
   noise.start(time);
-  noise.stop(time + 0.15);
+  noise.stop(time + 0.12);
   osc.start(time);
-  osc.stop(time + 0.1);
+  osc.stop(time + 0.08);
 }
 
-// Proceduralni zvuk Hi-Hat-a (cimbala)
-function playHiHat(audioContext, time, open = false) {
+function playHiHat(audioContext, time, open = false, level = 0.4) {
   const duration = open ? 0.25 : 0.05;
-  const bufferSize = audioContext.sampleRate * duration;
-  const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++) {
-    data[i] = Math.random() * 2 - 1;
-  }
-
   const noise = audioContext.createBufferSource();
-  noise.buffer = buffer;
+  noise.buffer = getMetroNoiseBuffer(audioContext);
 
   const filter = audioContext.createBiquadFilter();
   filter.type = "highpass";
-  filter.frequency.value = 7500;
+  filter.frequency.value = 6800;
 
   const gain = audioContext.createGain();
-  gain.gain.setValueAtTime(0.25, time);
-  gain.gain.exponentialRampToValueAtTime(0.01, time + duration - 0.01);
+  gain.gain.setValueAtTime(Math.max(0.03, level * 0.30), time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + duration - 0.005);
 
   noise.connect(filter);
   filter.connect(gain);
-  gain.connect(audioContext.destination);
+  gain.connect(metro.master);
 
   noise.start(time);
   noise.stop(time + duration);
 }
 
-function playDrumPatternStep(rhythm, step) {
-  if (!metro.audio) {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    metro.audio = new AudioContext();
-  }
-  if (metro.audio.state === "suspended") metro.audio.resume();
+function scheduleMetroSound(sound, time) {
+  const audioContext = ensureMetroAudio();
+  if (sound.type === "click") playClick(audioContext, time, sound);
+  else if (sound.type === "kick") playKick(audioContext, time);
+  else if (sound.type === "snare") playSnare(audioContext, time, Number(sound.level) || 0.7);
+  else if (sound.type === "hat") playHiHat(audioContext, time, !!sound.open, Number(sound.level) || 0.4);
+}
 
-  const time = metro.audio.currentTime;
+function clearMetroVisualTimers() {
+  metro.visualTimers.forEach((timer) => window.clearTimeout(timer));
+  metro.visualTimers = [];
+}
 
-  if (rhythm === "rock") {
-    if (step === 0 || step === 4) playKick(metro.audio, time);
-    if (step === 2 || step === 6) playSnare(metro.audio, time);
-    playHiHat(metro.audio, time, step === 7);
-  } else if (rhythm === "funk") {
-    if (step === 0 || step === 3 || step === 4) playKick(metro.audio, time);
-    if (step === 2 || step === 6) playSnare(metro.audio, time);
-    else if (step === 7) playSnare(metro.audio, time, 0.15); // Ghost note
-    playHiHat(metro.audio, time, step === 5);
-  } else if (rhythm === "swing") {
-    if (step === 0 || step === 6) playKick(metro.audio, time);
-    if (step === 3 || step === 9) playSnare(metro.audio, time);
-    if ([0, 2, 3, 5, 6, 8, 9, 11].includes(step)) {
-      playHiHat(metro.audio, time, [2, 8].includes(step));
+function scheduleMetroVisual(step, time, isCountIn, drawBeats, mtPlay) {
+  const delay = Math.max(0, (time - metro.audio.currentTime) * 1000);
+  const timer = window.setTimeout(() => {
+    metro.visualTimers = metro.visualTimers.filter((candidate) => candidate !== timer);
+    metro.beatIndex = step.beatIndex;
+    metro.stepIndex = isCountIn ? -1 : step.stepIndex;
+    drawBeats(isCountIn);
+    if (isCountIn) {
+      const bar = Math.min(metro.countInPattern.bars, (step.barIndex || 0) + 1);
+      mtPlay.textContent = `Uvod ${bar}/${metro.countInPattern.bars}`;
+    } else {
+      mtPlay.textContent = "Stop";
     }
-  } else if (rhythm === "rumba") {
-    if (step === 0 || step === 3 || step === 4 || step === 7) playKick(metro.audio, time);
-    if (step === 2 || step === 5) playSnare(metro.audio, time);
-    playHiHat(metro.audio, time, step === 3);
+  }, delay);
+  metro.visualTimers.push(timer);
+}
+
+function scheduleNextMetroStep(drawBeats, mtPlay) {
+  let step;
+  let isCountIn = false;
+  if (metro.countInPattern && metro.countInCursor < metro.countInPattern.steps.length) {
+    step = metro.countInPattern.steps[metro.countInCursor];
+    metro.countInCursor += 1;
+    isCountIn = true;
+  } else {
+    step = metro.pattern.steps[metro.patternCursor];
+    metro.patternCursor = (metro.patternCursor + 1) % metro.pattern.steps.length;
+  }
+  step.sounds.forEach((sound) => scheduleMetroSound(sound, metro.nextStepTime));
+  scheduleMetroVisual(step, metro.nextStepTime, isCountIn, drawBeats, mtPlay);
+  metro.nextStepTime += (60 / metro.bpm) * step.durationPulses;
+}
+
+function runMetroScheduler(drawBeats, mtPlay) {
+  if (!metro.audio || !metro.pattern?.steps?.length) return;
+  while (metro.nextStepTime < metro.audio.currentTime + METRO_SCHEDULE_AHEAD_SECONDS) {
+    scheduleNextMetroStep(drawBeats, mtPlay);
   }
 }
 
@@ -378,16 +547,15 @@ export function initMetronome() {
   const mtPlay = document.getElementById("mtPlay");
   if (!mtPlay) return;
 
-  const beatsBySig = { "2/4": 2, "3/4": 3, "4/4": 4, "6/8": 6, "7/8": 7, "9/8": 9 };
-
-  function drawBeats() {
+  function drawBeats(isCountIn = false) {
     const wrap = document.getElementById("mtBeats");
     if (!wrap) return;
-    const n = beatsBySig[metro.sig] || 4;
+    const n = buildMetronomePattern({ signature: metro.sig }).beats;
     wrap.innerHTML = "";
     for (let i = 0; i < n; i++) {
       const dot = document.createElement("span");
-      dot.className = "beat" + (i === 0 ? " strong" : "") + (i === metro.beatIndex ? " hit" : "");
+      const accented = beatAccentLevel(i, metro.sig) > 1;
+      dot.className = "beat" + (accented ? " strong" : "") + (i === metro.beatIndex ? " hit" : "") + (isCountIn ? " count-in" : "");
       wrap.appendChild(dot);
     }
   }
@@ -397,46 +565,13 @@ export function initMetronome() {
     if (mtVal) mtVal.textContent = metro.bpm;
   }
 
-  function click(accent) {
-    if (!metro.audio) {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      metro.audio = new AudioContext();
-    }
-    if (metro.audio.state === "suspended") metro.audio.resume();
-
-    const osc = metro.audio.createOscillator();
-    const gain = metro.audio.createGain();
-
-    osc.frequency.value = accent ? 1250 : 780;
-    gain.gain.setValueAtTime(accent ? 0.5 : 0.3, metro.audio.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, metro.audio.currentTime + 0.07);
-
-    osc.connect(gain);
-    gain.connect(metro.audio.destination);
-
-    osc.start();
-    osc.stop(metro.audio.currentTime + 0.08);
-  }
-
-  function tick() {
-    const is44 = metro.sig === "4/4";
-    const rhythm = metro.rhythm;
-
-    if (rhythm === "click" || !is44) {
-      // Standard metronome click on each beat
-      metro.beatIndex = (metro.beatIndex + 1) % (beatsBySig[metro.sig] || 4);
-      click(metro.beatIndex === 0);
-    } else {
-      // Drum machine sequence
-      const totalSteps = rhythm === "swing" ? 12 : 8;
-      const subdivPerBeat = rhythm === "swing" ? 3 : 2;
-
-      metro.stepIndex = (metro.stepIndex + 1) % totalSteps;
-      metro.beatIndex = Math.floor(metro.stepIndex / subdivPerBeat);
-
-      playDrumPatternStep(rhythm, metro.stepIndex);
-    }
-    drawBeats();
+  function syncOptionsUi() {
+    const subdivision = document.getElementById("mtSubdivision");
+    const swing = document.getElementById("mtSwing");
+    const swingValue = document.getElementById("mtSwingValue");
+    if (subdivision) subdivision.disabled = metro.rhythm !== "click";
+    if (swing) swing.disabled = metro.rhythm !== "swing";
+    if (swingValue) swingValue.textContent = `${metro.swingPercent}%`;
   }
 
   function stop() {
@@ -444,30 +579,46 @@ export function initMetronome() {
       window.clearInterval(metro.timer);
       metro.timer = null;
     }
+    clearMetroVisualTimers();
+    // Every look-ahead sound is routed through this run's master. Dropping
+    // that node silences future scheduled clicks immediately, so Stop and a
+    // tempo/pattern restart cannot leave one stale off-grid hit behind.
+    if (metro.master) {
+      try { metro.master.disconnect(); } catch (_error) {}
+      metro.master = null;
+    }
     metro.beatIndex = -1;
     metro.stepIndex = -1;
     drawBeats();
-    if (mtPlay) mtPlay.innerHTML = "&#9654; Start";
+    mtPlay.textContent = "Start";
+    mtPlay.setAttribute("aria-pressed", "false");
   }
 
-  function start() {
+  function start(useCountIn = true) {
     if (metro.timer) return;
-    if (mtPlay) mtPlay.innerHTML = "&#9632; Stop";
+    const audioContext = ensureMetroAudio();
+    metro.pattern = buildMetronomePattern({
+      signature: metro.sig,
+      rhythm: metro.rhythm,
+      subdivision: metro.subdivision,
+      swingPercent: metro.swingPercent
+    });
+    metro.countInPattern = buildCountInPattern(metro.sig, useCountIn ? metro.countInBars : 0);
+    metro.patternCursor = 0;
+    metro.countInCursor = 0;
     metro.beatIndex = -1;
     metro.stepIndex = -1;
-    tick();
-
-    const intervalMs = (metro.rhythm === "click" || metro.sig !== "4/4")
-      ? (60000 / metro.bpm)
-      : (metro.rhythm === "swing" ? (20000 / metro.bpm) : (30000 / metro.bpm));
-
-    metro.timer = window.setInterval(tick, intervalMs);
+    metro.nextStepTime = audioContext.currentTime + 0.055;
+    mtPlay.textContent = metro.countInPattern.steps.length ? "Uvod..." : "Stop";
+    mtPlay.setAttribute("aria-pressed", "true");
+    runMetroScheduler(drawBeats, mtPlay);
+    metro.timer = window.setInterval(() => runMetroScheduler(drawBeats, mtPlay), METRO_LOOKAHEAD_MS);
   }
 
   function restart() {
     const wasRunning = !!metro.timer;
     stop();
-    if (wasRunning) start();
+    if (wasRunning) start(false);
   }
 
   const mtUp = document.getElementById("mtUp");
@@ -494,6 +645,7 @@ export function initMetronome() {
       mtRhythm.value = "click";
       metro.rhythm = "click";
     }
+    syncOptionsUi();
     restart();
   });
 
@@ -504,7 +656,26 @@ export function initMetronome() {
       mtSig.value = "4/4";
       metro.sig = "4/4";
     }
+    syncOptionsUi();
     restart();
+  });
+
+  const mtSubdivision = document.getElementById("mtSubdivision");
+  if (mtSubdivision) mtSubdivision.addEventListener("change", (event) => {
+    metro.subdivision = Math.max(1, Math.min(4, Number(event.target.value) || 1));
+    restart();
+  });
+
+  const mtSwing = document.getElementById("mtSwing");
+  if (mtSwing) mtSwing.addEventListener("input", (event) => {
+    metro.swingPercent = Math.max(50, Math.min(75, Number(event.target.value) || 66));
+    syncOptionsUi();
+    restart();
+  });
+
+  const mtCountIn = document.getElementById("mtCountIn");
+  if (mtCountIn) mtCountIn.addEventListener("change", (event) => {
+    metro.countInBars = Math.max(0, Math.min(2, Number(event.target.value) || 0));
   });
 
   const mtTap = document.getElementById("mtTap");
@@ -522,11 +693,651 @@ export function initMetronome() {
 
   mtPlay.addEventListener("click", () => {
     if (metro.timer) stop();
-    else start();
+    else start(true);
   });
 
   updateBpm();
+  syncOptionsUi();
   drawBeats();
+}
+
+const CHART_MANUAL_SCROLL_PAUSE_MS = 2600;
+
+function markChartManualScroll(scroll, duration = CHART_MANUAL_SCROLL_PAUSE_MS) {
+  if (!scroll) return;
+  scroll.dataset.userScrollUntil = String(performance.now() + duration);
+}
+
+function setChartPlayheadPreview(strip, seconds) {
+  const playhead = strip.querySelector("#chartPlayhead");
+  if (!playhead) return;
+  const pixelsPerSecond = Number(strip.dataset.pixelsPerSecond) || 23;
+  const duration = Number(strip.dataset.duration) || 0;
+  const time = Math.max(0, Math.min(duration, Number(seconds) || 0));
+  // Keep the edit cursor synchronously available to the controller. A paused
+  // local recSeek may finish only after its audio buffer has loaded, while the
+  // user can click "+ Akord" immediately after releasing the playhead.
+  strip.dataset.chartCursorTime = String(time);
+  playhead.style.left = `${time * pixelsPerSecond}px`;
+  playhead.setAttribute("aria-valuenow", String(Math.round(time * 10) / 10));
+  playhead.setAttribute("aria-valuemax", String(duration));
+  playhead.setAttribute("aria-label", `Pozicija ${fmtChordTime(time)}`);
+}
+
+let chordEditorPreviewTimer = 0;
+
+function previewChordInEditor(name) {
+  const midis = chordPreviewMidis(name, 48);
+  if (!midis.length) return;
+  if (chordEditorPreviewTimer) window.clearTimeout(chordEditorPreviewTimer);
+  setAssistedMidiSet("chord-editor", new Set(midis), new Set(midis));
+  paintMidis(midis, `Provera: ${name}`, { autoClear: true, holdMs: 1050 });
+  chordEditorPreviewTimer = window.setTimeout(() => {
+    chordEditorPreviewTimer = 0;
+    setAssistedMidiSet("chord-editor", new Set());
+  }, 900);
+}
+
+export function openTimelineChordPicker(song, time) {
+  if (!song) return;
+  openChordPicker({
+    mode: "add",
+    timeLabel: fmtChordTime(time),
+    key: song.key || "",
+    chords: song.chords || [],
+    index: -1,
+    onPreview: previewChordInEditor,
+    onConfirm(name) {
+      window.FGRBridge?.addChordToSelected(name, time);
+    }
+  });
+}
+
+function openExistingChordPicker(song, index, returnFocus) {
+  const chord = song?.chords?.[index];
+  if (!chord) return;
+  openChordPicker({
+    mode: "edit",
+    currentName: chord.n,
+    timeLabel: fmtChordTime(chord.t),
+    key: song.key || "",
+    chords: song.chords,
+    index,
+    onPreview: previewChordInEditor,
+    onConfirm(name) {
+      const updated = song.chords.map((entry, entryIndex) => entryIndex === index ? { ...entry, n: name } : { ...entry });
+      if (window.FGRBridge?.setChordsForSelected(updated) && state.tool === "chart") renderTool();
+    },
+    returnFocus
+  });
+}
+
+function requestChordDeletion(song, index) {
+  const chord = song?.chords?.[index];
+  if (!chord) return;
+  if (!window.confirm(`Obriši ${chord.n} (${fmtChordTime(chord.t)})? Ova izmena će biti sačuvana.`)) return;
+  if (window.FGRBridge?.removeChordFromSelected(index) && state.tool === "chart") renderTool();
+}
+
+function commitChordListUpdate(chords) {
+  if (window.FGRBridge?.setChordsForSelected(chords) && state.tool === "chart") renderTool();
+}
+
+function stripSplitOptions(strip) {
+  return {
+    duration: Math.max(0, Number(strip?.dataset.duration) || 0),
+    chordEndTime: Number(strip?.dataset.chordEndTime),
+    minimumGap: 0.05
+  };
+}
+
+function stripPlayheadTime(strip) {
+  const duration = Math.max(0, Number(strip?.dataset.duration) || 0);
+  const clampTime = (value) => Math.max(0, Math.min(duration, value));
+  const cursor = Number(strip?.dataset.chartCursorTime);
+  if (strip?.dataset.chartCursorTime !== undefined && Number.isFinite(cursor)) return clampTime(cursor);
+  // Right after a re-render the playhead element exists but has no position
+  // yet, so the live playback clock is the only reliable fallback.
+  const playheadLeft = Number.parseFloat(strip?.querySelector("#chartPlayhead")?.style.left);
+  if (Number.isFinite(playheadLeft)) {
+    return clampTime(playheadLeft / normalizeTimelineZoom(strip?.dataset.pixelsPerSecond));
+  }
+  const live = Number(window.FGRBridge?.getTime?.());
+  return clampTime(Number.isFinite(live) ? live : 0);
+}
+
+function requestChordSplit(song, index, time, strip) {
+  if (!song?.chords?.[index]) return;
+  const result = splitChordSegment(song.chords, index, time, stripSplitOptions(strip));
+  if (!result.changed) return;
+  commitChordListUpdate(result.chords);
+}
+
+function openPlayheadChordInsert(song, index, strip) {
+  const chord = song?.chords?.[index];
+  if (!chord) return;
+  const time = stripPlayheadTime(strip);
+  openChordPicker({
+    mode: "add",
+    timeLabel: fmtChordTime(time),
+    key: song.key || "",
+    chords: song.chords,
+    index,
+    onPreview: previewChordInEditor,
+    onConfirm(name) {
+      const result = splitChordSegment(song.chords, index, time, { ...stripSplitOptions(strip), name });
+      if (result.changed) {
+        commitChordListUpdate(result.chords);
+        return;
+      }
+      // The segment is too short to split; replacing the whole chord keeps
+      // the user's intent (the chosen chord sounds from here) without
+      // creating an inaudible sliver.
+      commitChordListUpdate(song.chords.map((entry, entryIndex) => (
+        entryIndex === index ? { ...entry, n: name } : { ...entry }
+      )));
+    }
+  });
+}
+
+function readTimelineZoom() {
+  const saved = readJsonStorage(TIMELINE_ZOOM_STORAGE_KEY, {});
+  return normalizeTimelineZoom(saved && saved.pixelsPerSecond);
+}
+
+function saveTimelineZoom(pixelsPerSecond) {
+  writeJsonStorage(TIMELINE_ZOOM_STORAGE_KEY, {
+    pixelsPerSecond: normalizeTimelineZoom(pixelsPerSecond)
+  });
+}
+
+function renderChartTimelineScale(strip, chords) {
+  const pixelsPerSecond = normalizeTimelineZoom(strip.dataset.pixelsPerSecond);
+  const duration = Math.max(0, Number(strip.dataset.duration) || 0);
+  const displayDuration = Math.max(40, Math.ceil(duration / 5) * 5);
+  const canvasWidth = Math.max(840, Math.round(displayDuration * pixelsPerSecond));
+  const chordEndTime = resolveChordEndTime(chords, duration, Number(strip.dataset.chordEndTime));
+  const ruler = strip.querySelector(".chart-ruler");
+  const grid = strip.querySelector(".chart-grid");
+  const tickSeconds = timelineTickSeconds(pixelsPerSecond);
+
+  strip.dataset.pixelsPerSecond = String(pixelsPerSecond);
+  strip.dataset.tickSeconds = String(tickSeconds);
+  strip.style.width = canvasWidth + "px";
+
+  if (ruler && grid) {
+    ruler.replaceChildren();
+    grid.replaceChildren();
+    for (let second = 0; second <= displayDuration; second += tickSeconds) {
+      const left = second * pixelsPerSecond;
+      const tick = document.createElement("span");
+      tick.style.left = left + "px";
+      tick.textContent = fmtTime(second);
+      ruler.appendChild(tick);
+      const line = document.createElement("i");
+      line.style.left = left + "px";
+      grid.appendChild(line);
+    }
+  }
+
+  chords.forEach((chord, index) => {
+    const cell = strip.querySelector('.cc[data-index="' + index + '"]');
+    if (!cell) return;
+    const geometry = chordSegmentGeometry(chords, index, duration, pixelsPerSecond, chordEndTime);
+    cell.style.left = geometry.left + "px";
+    cell.style.width = geometry.width + "px";
+    const durationLabel = cell.querySelector(".cc-duration");
+    if (durationLabel) durationLabel.textContent = geometry.duration.toFixed(1) + " s";
+  });
+
+  const playhead = strip.querySelector("#chartPlayhead");
+  if (playhead) {
+    setChartPlayheadPreview(strip, Number(playhead.getAttribute("aria-valuenow")) || 0);
+  }
+  return canvasWidth;
+}
+
+function bindChartZoomControls(options) {
+  const { shell, strip, chords } = options;
+  const scroll = shell.querySelector(".chart-timeline-scroll");
+  const controls = shell.querySelector(".chart-zoom-controls");
+  const output = shell.querySelector(".chart-zoom-value");
+  if (!scroll || !controls || !output) return;
+
+  const syncOutput = () => {
+    const pixelsPerSecond = normalizeTimelineZoom(strip.dataset.pixelsPerSecond);
+    output.value = Math.round(pixelsPerSecond / TIMELINE_ZOOM_DEFAULT * 100) + "%";
+    output.textContent = output.value;
+  };
+
+  const applyZoom = (nextValue, anchorClientX) => {
+    const oldPixelsPerSecond = normalizeTimelineZoom(strip.dataset.pixelsPerSecond);
+    const nextPixelsPerSecond = normalizeTimelineZoom(nextValue);
+    if (Math.abs(nextPixelsPerSecond - oldPixelsPerSecond) < 0.001) {
+      syncOutput();
+      return;
+    }
+    const rect = scroll.getBoundingClientRect();
+    const anchorViewportX = Number.isFinite(Number(anchorClientX))
+      ? Math.max(0, Math.min(rect.width, Number(anchorClientX) - rect.left))
+      : rect.width / 2;
+    const duration = Math.max(0, Number(strip.dataset.duration) || 0);
+    const displayDuration = Math.max(40, Math.ceil(duration / 5) * 5);
+    const newContentWidth = Math.max(840, Math.round(displayDuration * nextPixelsPerSecond));
+    const nextScrollLeft = timelineZoomScrollLeft({
+      scrollLeft: scroll.scrollLeft,
+      viewportWidth: scroll.clientWidth,
+      anchorViewportX,
+      oldPixelsPerSecond,
+      newPixelsPerSecond: nextPixelsPerSecond,
+      newContentWidth
+    });
+
+    strip.dataset.pixelsPerSecond = String(nextPixelsPerSecond);
+    renderChartTimelineScale(strip, chords);
+    saveTimelineZoom(nextPixelsPerSecond);
+    syncOutput();
+    markChartManualScroll(scroll);
+    requestAnimationFrame(() => {
+      scroll.scrollLeft = nextScrollLeft;
+    });
+  };
+
+  controls.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-chart-zoom]");
+    if (!button) return;
+    const action = button.dataset.chartZoom;
+    const current = normalizeTimelineZoom(strip.dataset.pixelsPerSecond);
+    if (action === "reset") applyZoom(TIMELINE_ZOOM_DEFAULT);
+    else applyZoom(stepTimelineZoom(current, action === "in" ? 1 : -1));
+  });
+
+  scroll.addEventListener("wheel", (event) => {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    const current = normalizeTimelineZoom(strip.dataset.pixelsPerSecond);
+    applyZoom(stepTimelineZoom(current, event.deltaY < 0 ? 1 : -1), event.clientX);
+  }, { passive: false });
+
+  const jumpButton = shell.querySelector("#chartJumpToPlayhead");
+  if (jumpButton) jumpButton.addEventListener("click", () => {
+    const pixelsPerSecond = normalizeTimelineZoom(strip.dataset.pixelsPerSecond);
+    const left = stripPlayheadTime(strip) * pixelsPerSecond;
+    // Clearing the manual-scroll pause re-enables auto-follow during
+    // playback; the auto-scroll window keeps this programmatic jump from
+    // being re-classified as a manual scroll.
+    delete scroll.dataset.userScrollUntil;
+    scroll.dataset.autoScrollUntil = String(performance.now() + 400);
+    scroll.scrollLeft = Math.max(0, left - scroll.clientWidth * 0.5);
+  });
+}
+
+function bindChartTimelineInteractions(strip) {
+  const scroll = strip.closest(".chart-timeline-scroll");
+  const playhead = strip.querySelector("#chartPlayhead");
+  if (!scroll || !playhead || strip.dataset.scrubBound === "true") return;
+  strip.dataset.scrubBound = "true";
+  let pointerId = null;
+  let pendingTime = null;
+  let seekFrame = 0;
+
+  const timeAtPointer = (event) => {
+    const rect = strip.getBoundingClientRect();
+    return timelineSecondsFromClientX({
+      clientX: event.clientX,
+      timelineLeft: rect.left,
+      pixelsPerSecond: Number(strip.dataset.pixelsPerSecond) || 23,
+      duration: Number(strip.dataset.duration) || 0
+    });
+  };
+
+  const flushSeek = () => {
+    seekFrame = 0;
+    if (pendingTime === null) return;
+    const time = pendingTime;
+    pendingTime = null;
+    setChartPlayheadPreview(strip, time);
+    window.FGRBridge?.seekTo(time);
+  };
+
+  const requestSeek = (time, immediate = false) => {
+    pendingTime = time;
+    setChartPlayheadPreview(strip, time);
+    if (immediate) {
+      if (seekFrame) cancelAnimationFrame(seekFrame);
+      flushSeek();
+    } else if (!seekFrame) {
+      seekFrame = requestAnimationFrame(flushSeek);
+    }
+  };
+
+  const finishScrub = (event, commitPointerPosition = false) => {
+    if (pointerId === null || (event && event.pointerId !== pointerId)) return;
+    if (commitPointerPosition && event) {
+      requestSeek(timeAtPointer(event), true);
+    } else if (pendingTime !== null) {
+      if (seekFrame) cancelAnimationFrame(seekFrame);
+      flushSeek();
+    } else if (seekFrame) {
+      cancelAnimationFrame(seekFrame);
+      seekFrame = 0;
+    }
+    const capturedPointerId = pointerId;
+    pointerId = null;
+    strip.classList.remove("is-scrubbing");
+    playhead.setAttribute("aria-grabbed", "false");
+    markChartManualScroll(scroll);
+    try { strip.releasePointerCapture(capturedPointerId); } catch (_error) {}
+  };
+
+  strip.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest(".cc")) return;
+    event.preventDefault();
+    pointerId = event.pointerId;
+    strip.setPointerCapture(pointerId);
+    strip.classList.add("is-scrubbing");
+    playhead.setAttribute("aria-grabbed", "true");
+    markChartManualScroll(scroll);
+    requestSeek(timeAtPointer(event), true);
+  });
+  strip.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== pointerId) return;
+    event.preventDefault();
+    requestSeek(timeAtPointer(event));
+  });
+  strip.addEventListener("pointerup", (event) => finishScrub(event, true));
+  strip.addEventListener("pointercancel", (event) => finishScrub(event, false));
+  strip.addEventListener("lostpointercapture", (event) => finishScrub(event, false));
+
+  strip.addEventListener("contextmenu", (event) => {
+    if (event.target.closest(".cc")) return;
+    event.preventDefault();
+    const song = state.repertoire.find((entry) => entry.id === state.selectedSongId) || null;
+    if (!song) return;
+    const time = timeAtPointer(event);
+    setChartPlayheadPreview(strip, time);
+    markChartManualScroll(scroll);
+    showTimelineContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      timeLabel: fmtChordTime(time),
+      onAdd: () => openTimelineChordPicker(song, time)
+    });
+  });
+
+  playhead.addEventListener("keydown", (event) => {
+    const current = Number(playhead.getAttribute("aria-valuenow")) || 0;
+    const duration = Number(strip.dataset.duration) || 0;
+    const amount = event.shiftKey ? 5 : 1;
+    let next = current;
+    if (event.key === "ArrowLeft") next -= amount;
+    else if (event.key === "ArrowRight") next += amount;
+    else if (event.key === "PageDown") next -= 10;
+    else if (event.key === "PageUp") next += 10;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = duration;
+    else return;
+    event.preventDefault();
+    markChartManualScroll(scroll);
+    requestSeek(Math.max(0, Math.min(duration, next)), true);
+  });
+
+  scroll.addEventListener("wheel", () => markChartManualScroll(scroll), { passive: true });
+  scroll.addEventListener("pointerdown", () => markChartManualScroll(scroll), { passive: true });
+  scroll.addEventListener("scroll", () => {
+    if (performance.now() > (Number(scroll.dataset.autoScrollUntil) || 0)) markChartManualScroll(scroll);
+  }, { passive: true });
+}
+
+function bindChordBoundaryInteractions(options) {
+  const { strip, cell, chord, index, chords, duration, pixelsPerSecond, currentSong } = options;
+  const scroll = strip.closest(".chart-timeline-scroll");
+  const moveSurface = cell.querySelector(".cc-move-surface");
+  const leftHandle = cell.querySelector(".cc-edge-left");
+  const rightHandle = cell.querySelector(".cc-edge-right");
+  let activeInput = null;
+  let pointerId = null;
+  let editMode = "move";
+  let startClientX = 0;
+  let previewEdit = null;
+  let dragged = false;
+  let ignoreClickUntil = 0;
+  const currentDuration = () => Number(strip.dataset.duration) || duration;
+  const currentPixelsPerSecond = () => normalizeTimelineZoom(strip.dataset.pixelsPerSecond || pixelsPerSecond);
+  const currentChordEndTime = () => resolveChordEndTime(
+    chords,
+    currentDuration(),
+    Number(strip.dataset.chordEndTime)
+  );
+  const buildEdit = (deltaSeconds) => editChordSegment(chords, index, editMode, deltaSeconds, {
+    duration: currentDuration(),
+    chordEndTime: currentChordEndTime(),
+    minimumGap: 0.05
+  });
+
+  const renderPreview = (edit) => {
+    previewEdit = edit;
+    edit.chords.forEach((entry, entryIndex) => {
+      const target = strip.querySelector(`.cc[data-index="${entryIndex}"]`);
+      if (!target) return;
+      const geometry = chordSegmentGeometry(
+        edit.chords,
+        entryIndex,
+        currentDuration(),
+        currentPixelsPerSecond(),
+        edit.chordEndTime
+      );
+      target.style.left = `${geometry.left}px`;
+      target.style.width = `${geometry.width}px`;
+      const durationLabel = target.querySelector(".cc-duration");
+      if (durationLabel) durationLabel.textContent = `${geometry.duration.toFixed(1)} s`;
+      target.dataset.t = String(entry.t);
+      target.setAttribute("aria-label", `${transposeChordName(entry.n || "")}, od ${fmtChordTime(geometry.start)} do ${fmtChordTime(geometry.end)}`);
+      const timeLabel = target.querySelector(".t");
+      if (timeLabel) timeLabel.textContent = fmtChordTime(entry.t);
+    });
+    const activeGeometry = chordSegmentGeometry(
+      edit.chords,
+      index,
+      currentDuration(),
+      currentPixelsPerSecond(),
+      edit.chordEndTime
+    );
+    const liveTime = cell.querySelector(".cc-live-time");
+    if (liveTime) {
+      liveTime.textContent = editMode === "move"
+        ? `${fmtChordTime(activeGeometry.start)}–${fmtChordTime(activeGeometry.end)} · ${activeGeometry.duration.toFixed(2)} s`
+        : editMode === "right"
+          ? `Kraj ${fmtChordTime(activeGeometry.end)} · ${activeGeometry.duration.toFixed(2)} s`
+          : `Početak ${fmtChordTime(activeGeometry.start)} · ${activeGeometry.duration.toFixed(2)} s`;
+    }
+    cell.dataset.previewTime = String(edit.chords[index]?.t || 0);
+    cell.setAttribute("aria-label", `${transposeChordName(chord.n)}, od ${fmtChordTime(activeGeometry.start)} do ${fmtChordTime(activeGeometry.end)}`);
+    return edit;
+  };
+
+  const commit = (edit, input) => {
+    window.dispatchEvent(new CustomEvent("fgr:movechordrequest", {
+      detail: {
+        index,
+        mode: editMode,
+        deltaSeconds: edit.appliedDelta,
+        duration: currentDuration(),
+        chordEndTime: currentChordEndTime(),
+        input
+      }
+    }));
+  };
+
+  const updateFromClientX = (clientX) => {
+    const position = Number(clientX);
+    if (!Number.isFinite(position)) return;
+    const deltaPixels = position - startClientX;
+    if (!dragged && Math.abs(deltaPixels) < 3) return;
+    dragged = true;
+    renderPreview(buildEdit(deltaPixels / currentPixelsPerSecond()));
+  };
+
+  const detachGlobalDragListeners = () => {
+    window.removeEventListener("pointermove", handlePointerMove, true);
+    window.removeEventListener("pointerup", handlePointerUp, true);
+    window.removeEventListener("pointercancel", handlePointerCancel, true);
+    window.removeEventListener("mousemove", handleMouseMove, true);
+    window.removeEventListener("mouseup", handleMouseUp, true);
+    window.removeEventListener("blur", handleWindowBlur, true);
+  };
+
+  const finishDrag = (event, shouldCommit) => {
+    if (!activeInput) return;
+    if (activeInput === "pointer" && event?.pointerId !== undefined && event.pointerId !== pointerId) return;
+    if (shouldCommit && event) updateFromClientX(event.clientX);
+    const completedInput = activeInput;
+    const completedPointerId = pointerId;
+    activeInput = null;
+    pointerId = null;
+    detachGlobalDragListeners();
+    cell.classList.remove("is-adjusting", "is-moving", "is-resizing-left", "is-resizing-right");
+    cell.setAttribute("aria-grabbed", "false");
+    cell.dataset.dragState = "idle";
+    markChartManualScroll(scroll);
+    if (completedInput === "pointer" && completedPointerId !== null) {
+      try { cell.releasePointerCapture(completedPointerId); } catch (_error) {}
+    }
+
+    if (shouldCommit && dragged) {
+      ignoreClickUntil = performance.now() + 650;
+      if (previewEdit?.changed) commit(previewEdit, completedInput);
+    } else {
+      renderPreview(buildEdit(0));
+    }
+  };
+
+  function handlePointerMove(event) {
+    if (activeInput !== "pointer" || event.pointerId !== pointerId) return;
+    event.preventDefault();
+    updateFromClientX(event.clientX);
+  }
+
+  function handlePointerUp(event) {
+    if (activeInput !== "pointer" || event.pointerId !== pointerId) return;
+    event.preventDefault();
+    finishDrag(event, true);
+  }
+
+  function handlePointerCancel(event) {
+    if (activeInput !== "pointer" || event.pointerId !== pointerId) return;
+    finishDrag(event, false);
+  }
+
+  function handleMouseMove(event) {
+    if (!activeInput) return;
+    event.preventDefault();
+    updateFromClientX(event.clientX);
+  }
+
+  function handleMouseUp(event) {
+    if (!activeInput) return;
+    event.preventDefault();
+    finishDrag(event, true);
+  }
+
+  function handleWindowBlur() {
+    finishDrag(null, false);
+  }
+
+  const attachGlobalDragListeners = () => {
+    // Listen outside the card while dragging. This keeps mouse input working
+    // even when pointer capture is unavailable or an injected drag only emits
+    // the classic mouse event sequence.
+    window.addEventListener("pointermove", handlePointerMove, { capture: true, passive: false });
+    window.addEventListener("pointerup", handlePointerUp, { capture: true, passive: false });
+    window.addEventListener("pointercancel", handlePointerCancel, { capture: true, passive: false });
+    window.addEventListener("mousemove", handleMouseMove, { capture: true, passive: false });
+    window.addEventListener("mouseup", handleMouseUp, { capture: true, passive: false });
+    window.addEventListener("blur", handleWindowBlur, true);
+  };
+
+  const beginDrag = (event, input, mode) => {
+    if (activeInput || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    activeInput = input;
+    editMode = mode;
+    pointerId = input === "pointer" ? event.pointerId : null;
+    startClientX = Number(event.clientX) || 0;
+    previewEdit = buildEdit(0);
+    dragged = false;
+    cell.classList.add("is-adjusting", mode === "right" ? "is-resizing-right" : mode === "left" ? "is-resizing-left" : "is-moving");
+    cell.setAttribute("aria-grabbed", "true");
+    cell.dataset.dragState = "dragging";
+    renderPreview(previewEdit);
+    cell.focus({ preventScroll: true });
+    markChartManualScroll(scroll);
+    attachGlobalDragListeners();
+    if (input === "pointer") {
+      try { cell.setPointerCapture(pointerId); } catch (_error) {}
+    }
+  };
+
+  cell.dataset.boundaryAdjustable = "true";
+  cell.dataset.dragState = "idle";
+  cell.title = "Sredina pomera ceo akord; leva i desna ivica menjaju trajanje. Desni klik otvara izmene.";
+  cell.setAttribute("aria-keyshortcuts", "Alt+ArrowLeft Alt+ArrowRight Shift+ArrowLeft Shift+ArrowRight");
+  cell.setAttribute("aria-grabbed", "false");
+
+  const bindDragStart = (target, mode) => {
+    if (!target || target.disabled) return;
+    target.addEventListener("pointerdown", (event) => beginDrag(event, "pointer", mode));
+    target.addEventListener("mousedown", (event) => beginDrag(event, "mouse", mode));
+  };
+  bindDragStart(moveSurface, "move");
+  bindDragStart(leftHandle, "left");
+  bindDragStart(rightHandle, "right");
+  cell.addEventListener("dragstart", (event) => event.preventDefault());
+
+  cell.addEventListener("keydown", (event) => {
+    const edgeMode = event.target.closest?.(".cc-edge-right") ? "right" : event.target.closest?.(".cc-edge-left") ? "left" : "move";
+    const edgeHasFocus = edgeMode !== "move";
+    if ((!edgeHasFocus && !(event.altKey || event.shiftKey)) || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    editMode = edgeMode;
+    const direction = event.key === "ArrowLeft" ? -1 : 1;
+    const edit = renderPreview(buildEdit(direction * 0.05));
+    if (edit.changed) commit(edit, "keyboard");
+    markChartManualScroll(scroll);
+  });
+
+  moveSurface?.addEventListener("click", (event) => {
+    if (performance.now() < ignoreClickUntil) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    window.dispatchEvent(new CustomEvent("fgr:seekrequest", {
+      detail: { time: Number(cell.dataset.t) || 0 }
+    }));
+    paintChordName(transposeChordName(chord.n), false);
+  });
+  cell.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const pointerTime = timelineSecondsFromClientX({
+      clientX: event.clientX,
+      timelineLeft: strip.getBoundingClientRect().left,
+      pixelsPerSecond: currentPixelsPerSecond(),
+      duration: currentDuration()
+    });
+    showChordContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      name: chord.n,
+      onEdit: () => openExistingChordPicker(currentSong, index, cell),
+      onSplit: () => requestChordSplit(currentSong, index, pointerTime, strip),
+      onAddAtPlayhead: () => openPlayheadChordInsert(currentSong, index, strip),
+      onDelete: () => requestChordDeletion(currentSong, index)
+    });
+  });
 }
 
 // ---------------- ALATI (akordi, skale, vezba, chart) ----------------
@@ -834,41 +1645,94 @@ export const TOOLS = {
     const toolBody = document.getElementById("toolBody");
     const currentSong = state.repertoire.find((song) => song.id === state.selectedSongId) || null;
     var chords = currentSong && Array.isArray(currentSong.chords) ? currentSong.chords : [];
-    var head = '<div class="scale-head"><b style="font-size:12.5px">' +
-      (currentSong ? (currentSong.title || "Pesma") : "Nema izabrane pesme") + " · chord chart</b>" +
-      (currentSong ? '<button class="text-button mini primary-button" id="ccAdd" type="button">+ Akord na trenutno vreme</button>' : "") +
-      '<span class="tool-note" style="margin:0">klik na akord — pesma skače na to mesto · desni klik briše</span></div>';
-    
-    toolBody.innerHTML = head + '<div class="cc-strip" id="ccStrip"></div>';
+    var lastTime = chords.reduce(function (maximum, chord) {
+      return Math.max(maximum, Number(chord.t) || 0);
+    }, 0);
+    var knownDuration = currentSong && window.FGRBridge?.getDuration
+      ? Number(window.FGRBridge.getDuration()) || 0
+      : Number(currentSong?.duration || currentSong?.source?.duration) || 0;
+    var duration = knownDuration > 0
+      ? Math.max(knownDuration, lastTime + 0.05)
+      : Math.max(40, lastTime + 8);
+    var displayDuration = Math.max(40, Math.ceil(duration / 5) * 5);
+    var chordEndTime = resolveChordEndTime(chords, duration, currentSong?.chordEndTime);
+    var pixelsPerSecond = readTimelineZoom();
+    var canvasWidth = Math.max(840, Math.round(displayDuration * pixelsPerSecond));
+
+    toolBody.innerHTML =
+      '<div class="chart-timeline-shell">' +
+        '<div class="chart-zoom-bar">' +
+          '<button type="button" class="chart-playhead-jump" id="chartJumpToPlayhead" title="Skroluj timeline na trenutnu poziciju plejheda">⌖ Na plejhed</button>' +
+          '<span>Zum timelinea</span>' +
+          '<div class="chart-zoom-controls" role="group" aria-label="Zum timelinea">' +
+            '<button type="button" data-chart-zoom="out" aria-label="Umanji timeline">&minus;</button>' +
+            '<button class="chart-zoom-value" type="button" data-chart-zoom="reset" title="Vrati na 100%">100%</button>' +
+            '<button type="button" data-chart-zoom="in" aria-label="Uvećaj timeline">+</button>' +
+          '</div>' +
+          '<small>Ctrl + točkić</small>' +
+        '</div>' +
+        '<div class="chart-timeline-scroll">' +
+          '<div class="chart-timeline" id="ccStrip" data-duration="' + duration + '" data-chord-end-time="' + chordEndTime + '" data-pixels-per-second="' + pixelsPerSecond + '" style="width:' + canvasWidth + 'px">' +
+            '<div class="chart-ruler" aria-hidden="true"></div>' +
+            '<div class="chart-grid" aria-hidden="true"></div>' +
+            '<div class="chart-chords" role="list" aria-label="Akordi pesme"></div>' +
+            '<div class="chart-line chart-line-melody" role="list" aria-label="Melodija"><span class="chart-line-tag">Melodija</span></div>' +
+            '<div class="chart-line chart-line-bass" role="list" aria-label="Bas linija"><span class="chart-line-tag">Bas</span></div>' +
+            '<button class="chart-playhead" id="chartPlayhead" type="button" role="slider" aria-label="Pozicija 0:00.0" aria-valuemin="0" aria-valuemax="' + duration + '" aria-valuenow="0" aria-grabbed="false"></button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
     var strip = document.getElementById("ccStrip");
+    var ruler = strip.querySelector(".chart-ruler");
+    var grid = strip.querySelector(".chart-grid");
+    var chordLayer = strip.querySelector(".chart-chords");
+    renderNoteLane(strip.querySelector(".chart-line-melody"), currentSong, "melody", pixelsPerSecond);
+    renderNoteLane(strip.querySelector(".chart-line-bass"), currentSong, "bass", pixelsPerSecond);
+
+    var tickSeconds = timelineTickSeconds(pixelsPerSecond);
+    for (var second = 0; second <= displayDuration; second += tickSeconds) {
+      var left = second * pixelsPerSecond;
+      var tick = document.createElement("span");
+      tick.style.left = left + "px";
+      tick.textContent = fmtTime(second);
+      ruler.appendChild(tick);
+      var line = document.createElement("i");
+      line.style.left = left + "px";
+      grid.appendChild(line);
+    }
+
     if (!chords.length) {
-      strip.innerHTML = '<div class="chart-empty">Još nema akorda za ovu pesmu.<br>' +
-        "Pusti pesmu i klikći <b>+ Akord na trenutno vreme</b> dok slušaš — ili sačekaj automatsko prepoznavanje iz koraka „Skidanja“.</div>";
+      var empty = document.createElement("div");
+      empty.className = "chart-empty chart-timeline-empty";
+      empty.innerHTML = currentSong
+        ? 'Još nema akorda. Pusti pesmu i klikni <b>+ Akord</b>, ili pokreni AI prepoznavanje u koraku 3.'
+        : "Izaberi pesmu iz repertoara da otvoriš njen chart.";
+      chordLayer.appendChild(empty);
     } else {
       chords.forEach(function (chord, index) {
         var cell = document.createElement("div");
         cell.className = "cc";
+        cell.tabIndex = 0;
         cell.dataset.t = chord.t;
-        cell.innerHTML = '<div class="n">' + transposeChordName(chord.n) + '</div><div class="t">' + fmtTime(chord.t) + "</div>";
-        cell.addEventListener("click", function () {
-          // prenosimo do ui-controllera preko eventa
-          window.dispatchEvent(new CustomEvent("fgr:seekrequest", { detail: { time: chord.t } }));
-          paintChordName(transposeChordName(chord.n), false);
-        });
-        cell.addEventListener("contextmenu", function (event) {
-          event.preventDefault();
-          if (confirm("Obriši " + chord.n + " (" + fmtTime(chord.t) + ")?")) {
-            window.dispatchEvent(new CustomEvent("fgr:removechordrequest", { detail: { index } }));
-          }
-        });
-        strip.appendChild(cell);
+        cell.dataset.index = String(index);
+        var geometry = chordSegmentGeometry(chords, index, duration, pixelsPerSecond, chordEndTime);
+        cell.style.left = geometry.left + "px";
+        cell.style.width = geometry.width + "px";
+        cell.style.top = "8px";
+        cell.setAttribute("role", "listitem");
+        cell.setAttribute("aria-label", transposeChordName(chord.n) + " od " + fmtChordTime(geometry.start) + " do " + fmtChordTime(geometry.end));
+        cell.innerHTML =
+          '<button class="cc-edge cc-edge-left" type="button" aria-label="Promeni početak akorda"></button>' +
+          '<button class="cc-move-surface" type="button" aria-label="Pomeri akord"><span class="n">' + transposeChordName(chord.n) + '</span><span class="t">' + fmtChordTime(chord.t) + '</span><span class="cc-duration">' + geometry.duration.toFixed(1) + ' s</span></button>' +
+          '<button class="cc-edge cc-edge-right" type="button" aria-label="Promeni kraj akorda"></button>' +
+          '<output class="cc-live-time" aria-hidden="true"></output>';
+        bindChordBoundaryInteractions({ strip, cell, chord, index, chords, duration, pixelsPerSecond, currentSong });
+        chordLayer.appendChild(cell);
       });
+      strip.dataset.lanes = "1";
     }
-    
-    const ccAdd = document.getElementById("ccAdd");
-    if (ccAdd) ccAdd.addEventListener("click", function () {
-      window.dispatchEvent(new CustomEvent("fgr:addchordrequest"));
-    });
+    bindChartTimelineInteractions(strip);
+    bindChartZoomControls({ shell: strip.closest(".chart-timeline-shell"), strip, chords });
   },
   
   // Krug kvinti
@@ -900,10 +1764,30 @@ export function renderTool() {
       chip.classList.toggle("on", chip.dataset.m === state.tool);
     });
   }
+  const addChordButton = document.getElementById("learnAddChord");
+  if (addChordButton) addChordButton.hidden = state.tool !== "chart";
+  const octaveControl = document.querySelector(".tool-octave");
+  if (octaveControl) octaveControl.hidden = state.tool === "chart";
   if (state.tool !== "vezba") {
     setMidiOnChordCallback(null);
   }
-  TOOLS[state.tool]();
+  try {
+    TOOLS[state.tool]();
+  } catch (error) {
+    // A blank panel is the worst possible report: it looks identical to "no
+    // data", to "not loaded yet" and to "this feature does nothing", and it
+    // sent us chasing the wrong bug for hours. Show the failure instead.
+    const message = String(error && error.message ? error.message : error);
+    console.error("Panel se nije iscrtao:", error);
+    toolBody.innerHTML =
+      '<div class="tool-render-error">'
+      + '<strong>Ovaj panel se nije iscrtao.</strong>'
+      + '<div class="tool-render-error-detail"></div>'
+      + '<small>Greška je zapisana u konzoli. Izaberi drugu pesmu ili osveži stranicu.</small>'
+      + '</div>';
+    const detail = toolBody.querySelector(".tool-render-error-detail");
+    if (detail) detail.textContent = message;
+  }
 }
 
 export function selectTool(name) {
@@ -1071,11 +1955,19 @@ export function parseChordName(name) {
   var suffix = m[2].split("/")[0].trim();
   const NAME_SUFFIX = {
     "": [0, 4, 7], "m": [0, 3, 7], "dim": [0, 3, 6], "°": [0, 3, 6], "sus4": [0, 5, 7], "sus2": [0, 2, 7],
-    "7": [0, 4, 7, 10], "m7": [0, 3, 7, 10], "maj7": [0, 4, 7, 11], "m7b5": [0, 3, 6, 10], "dim7": [0, 3, 6, 9], "6": [0, 4, 7, 9], "m6": [0, 3, 7, 9]
+    "7": [0, 4, 7, 10], "m7": [0, 3, 7, 10], "maj7": [0, 4, 7, 11], "m7b5": [0, 3, 6, 10], "dim7": [0, 3, 6, 9], "6": [0, 4, 7, 9], "m6": [0, 3, 7, 9], "aug": [0, 4, 8]
   };
   var ivs = NAME_SUFFIX[suffix];
   if (!ivs) ivs = suffix.indexOf("m") === 0 ? NAME_SUFFIX.m : NAME_SUFFIX[""];
-  return { pc: pc, ivs: ivs };
+  // Bas iz slash oznake (npr. "C/G") je potreban voicing motoru za levu ruku;
+  // stari pozivaoci koriste samo pc/ivs i ne primećuju ovo polje.
+  var slash = String(name || "").trim().split("/")[1];
+  var bassPc = null;
+  if (slash) {
+    var bassMatch = slash.trim().match(/^(Cis|Dis|Fis|Gis|C|D|E|F|G|A|B|H)/);
+    if (bassMatch) bassPc = NOTE_NAMES.indexOf(bassMatch[1]);
+  }
+  return { pc: pc, ivs: ivs, bassPc: bassPc };
 }
 
 export function paintChordName(name, weak) {

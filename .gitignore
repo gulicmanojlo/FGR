@@ -17,6 +17,9 @@ tmp/
 temp/
 __pycache__/
 separated/
+.fgr-processing/
+.fgr-runtime/
+.venv/
 
 # Dependencies/build output if added later
 node_modules/

@@ -1,0 +1,12 @@
+FGR POKRETANJE
+===============
+
+1. Dvoklik na POKRENI_FGR.bat.
+2. Pokretac podize web server i AI processing servis.
+3. FGR se automatski otvara u podrazumevanom spoljasnjem browseru.
+
+Ne otvaraj glavni index.html direktno iz Windows Explorera. On je ulazna
+stranica aplikacije, ali mora da bude otvoren preko lokalnog HTTP servera.
+
+OTVORI_FGR.url samo ponovo otvara aplikaciju kada serveri vec rade.
+ZAUSTAVI_FGR.bat zaustavlja samo servere koje je ovaj pokretac sam podigao.

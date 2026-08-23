@@ -30,7 +30,7 @@
   <body>
     <main>
       <h1>Osvezavam FGR...</h1>
-      <p>Brisem stari PWA cache i otvaram najnoviju verziju aplikacije.</p>
+      <p>Brisem stari cache, repertoar i lokalne snimke, pa otvaram cistu aplikaciju.</p>
     </main>
     <script>
       (async () => {
@@ -44,11 +44,31 @@
             const keys = await caches.keys();
             await Promise.all(keys.map((key) => caches.delete(key)));
           }
+          // Clearing the cache alone leaves the repertoire behind, which is
+          // where a half-written song record lives — the one that shows an
+          // empty chart because its analysis no longer exists. A reset that
+          // does not remove it is not a reset.
+          for (const key of Object.keys(localStorage)) {
+            if (key.startsWith("pwa-klavir") || key.startsWith("fgr-")) localStorage.removeItem(key);
+          }
+
+          if (window.indexedDB?.databases) {
+            const databases = await indexedDB.databases();
+            await Promise.all(
+              databases
+                .map((database) => database?.name)
+                .filter(Boolean)
+                .map((name) => new Promise((resolve) => {
+                  const request = indexedDB.deleteDatabase(name);
+                  request.onsuccess = request.onerror = request.onblocked = () => resolve();
+                }))
+            );
+          }
         } catch (error) {
-          console.warn("Cache reset nije kompletno uspeo", error);
+          console.warn("Reset nije kompletno uspeo", error);
         }
 
-        location.replace("./?v=96&cache-reset=" + Date.now());
+        location.replace("./?cache-reset=" + Date.now());
       })();
     </script>
   </body>

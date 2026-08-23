@@ -3,14 +3,25 @@ import subprocess
 import json
 import shutil
 import re
+import stat
+import sys
+import time
 from datetime import datetime, timezone
 
 PLAYLISTS_DIR = "playlists"
 LOG_FILE = "samples/stems_log.txt"
 DEMUCS_MODEL = "htdemucs_6s"
+# Four equivariant stabilization passes are deliberately the default. Stem
+# separation is the core product feature, so the extra processing time is a
+# better trade than letting a faster single/two-pass result leak vocals or lead
+# instruments into neighbouring channels. Advanced users can still lower this
+# through FGR_DEMUCS_SHIFTS on slower machines.
+DEMUCS_SHIFTS = max(1, int(os.environ.get("FGR_DEMUCS_SHIFTS", "4")))
+DEMUCS_OVERLAP = min(0.75, max(0.25, float(os.environ.get("FGR_DEMUCS_OVERLAP", "0.5"))))
 STEM_NAMES = ["bass", "drums", "guitar", "piano", "vocals", "other"]
-SUPPORTED_SOURCE_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".webm"}
+SUPPORTED_SOURCE_EXTENSIONS = {".mp3", ".wav", ".flac", ".m4a", ".aif", ".aiff"}
 QUEUED_PROCESSING_STATES = {"queued", "retry"}
+PROGRESS_PREFIX = "FGR_PROGRESS "
 
 os.makedirs("samples", exist_ok=True)
 log_f = open(LOG_FILE, "w", encoding="utf-8")
@@ -19,6 +30,42 @@ def log(msg):
     print(msg)
     log_f.write(msg + "\n")
     log_f.flush()
+
+def emit_progress(percent, message, **detail):
+    payload = {
+        "state": "separating",
+        "stage": "separation",
+        "percent": round(max(5.0, min(71.5, float(percent))), 1),
+        "message": str(message)[:240],
+        "stageDetail": detail,
+    }
+    # The parent service consumes this machine-readable line while the plain
+    # worker remains usable from a terminal.
+    print(PROGRESS_PREFIX + json.dumps(payload, ensure_ascii=False), flush=True)
+
+def remove_tree(path, attempts=6):
+    """Remove a worker-only tree, retrying transient Windows file locks."""
+    if not os.path.exists(path):
+        return
+
+    def onerror(_function, failing_path, _exc_info):
+        try:
+            os.chmod(failing_path, stat.S_IWRITE | stat.S_IREAD)
+        except OSError:
+            pass
+
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            shutil.rmtree(path, onerror=onerror)
+            return
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            last_error = exc
+            time.sleep(0.1 * (attempt + 1))
+    if last_error:
+        raise last_error
 
 def slugify(text):
     text = text.lower()
@@ -82,7 +129,7 @@ def download_youtube_audio(video_url, song_id):
         if temp_files:
             shutil.move(temp_files[0], output_filename)
         else:
-            raise Exception("yt-dlp completed but output MP3 file not found.")
+            raise Exception("yt-dlp completed but output WAV file was not found.")
 
     log(f"Successfully downloaded YouTube audio to {output_filename}")
     return output_filename
@@ -91,32 +138,86 @@ def process_song_stems(song_id, local_audio):
     log(f"Starting 6-stem Demucs separation for {song_id} using source {local_audio}...")
 
     log("Cleaning up temp directories...")
-    if os.path.exists("separated"):
-        shutil.rmtree("separated")
+    remove_tree("separated")
 
     try:
         # Run Demucs 6-stem model
         cmd = [
-            "demucs",
+            sys.executable,
+            "-m", "demucs",
             "-d", "cpu",
             "-n", DEMUCS_MODEL,
+            "--shifts", str(DEMUCS_SHIFTS),
+            "--overlap", str(DEMUCS_OVERLAP),
+            # Keep the six stems on one common amplitude scale. Per-stem
+            # rescaling changes their balance and prevents a neutral mixer
+            # from reconstructing the uploaded master faithfully.
+            "--float32",
+            "--clip-mode", "none",
             local_audio
         ]
         log(f"Running command: {' '.join(cmd)}")
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        log("demucs stdout:")
-        log(res.stdout)
-        log("demucs stderr:")
-        log(res.stderr)
-
-        if res.returncode != 0:
-            raise Exception(f"demucs exited with code {res.returncode}")
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+        buffer = ""
+        last_percent = -1
+        pass_index = 0
+        assert process.stdout is not None
+        while True:
+            character = process.stdout.read(1)
+            if character == "":
+                if process.poll() is not None:
+                    break
+                continue
+            if character not in {"\r", "\n"}:
+                buffer += character
+                if len(buffer) < 8192:
+                    continue
+            line = buffer.strip()
+            buffer = ""
+            if not line:
+                continue
+            match = re.search(r"(?<!\d)(\d{1,3})%", line)
+            if match:
+                demucs_percent = min(100, int(match.group(1)))
+                if demucs_percent + 40 < last_percent and pass_index < DEMUCS_SHIFTS - 1:
+                    pass_index += 1
+                    last_percent = -1
+                if demucs_percent >= last_percent + 1:
+                    last_percent = demucs_percent
+                    overall_worker_percent = (
+                        (pass_index + demucs_percent / 100.0) / DEMUCS_SHIFTS * 100.0
+                    )
+                    emit_progress(
+                        5.0 + overall_worker_percent * 0.665,
+                        f"Razdvajam 6 AI kanala: prolaz {pass_index + 1}/{DEMUCS_SHIFTS}, {demucs_percent}%",
+                        worker="demucs",
+                        workerPercent=round(overall_worker_percent, 1),
+                        passPercent=demucs_percent,
+                        passIndex=pass_index + 1,
+                        passCount=DEMUCS_SHIFTS,
+                        model=DEMUCS_MODEL,
+                    )
+            elif line:
+                log("demucs: " + line)
+        if buffer.strip():
+            log("demucs: " + buffer.strip())
+        return_code = process.wait()
+        if return_code != 0:
+            raise Exception(f"demucs exited with code {return_code}")
 
     except Exception as e:
         log(f"Demucs processing failed for {song_id}: {e}")
         return False, str(e)
 
-    log("Converting isolated stems to browser-ready MP3 (320kbps)...")
+    log("Preserving isolated stems as lossless float32 WAV...")
     output_dir = f"samples/{song_id}"
     os.makedirs(output_dir, exist_ok=True)
 
@@ -126,31 +227,32 @@ def process_song_stems(song_id, local_audio):
 
         for stem in STEM_NAMES:
             wav_path = f"separated/{DEMUCS_MODEL}/{input_name_clean}/{stem}.wav"
-            mp3_path = f"{output_dir}/{stem}.mp3"
+            output_path = f"{output_dir}/{stem}.wav"
+            temporary_path = f"{output_path}.tmp"
 
             if not os.path.exists(wav_path):
                 raise FileNotFoundError(f"Stem file not found: {wav_path}")
 
-            cmd = [
-                "ffmpeg",
-                "-y",
-                "-i", wav_path,
-                "-c:a", "libmp3lame",
-                "-b:a", "320k",
-                "-map_metadata", "-1",
-                mp3_path
-            ]
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if res.returncode != 0:
-                raise Exception(f"ffmpeg exited with code {res.returncode} for stem {stem}")
-            log(f"Saved stem: {mp3_path}")
+            # Demucs already produced a common-scale float32 WAV. Copy those
+            # exact samples instead of introducing a second, per-stem lossy MP3
+            # encode that prevents the mixer from reconstructing the separated
+            # result faithfully.
+            try:
+                shutil.copyfile(wav_path, temporary_path)
+                os.replace(temporary_path, output_path)
+            finally:
+                if os.path.exists(temporary_path):
+                    os.remove(temporary_path)
+            legacy_mp3_path = f"{output_dir}/{stem}.mp3"
+            if os.path.exists(legacy_mp3_path):
+                os.remove(legacy_mp3_path)
+            log(f"Saved lossless stem: {output_path}")
 
     except Exception as e:
-        log(f"FFmpeg conversion failed for {song_id}: {e}")
+        log(f"Lossless stem persistence failed for {song_id}: {e}")
         return False, str(e)
     finally:
-        if os.path.exists("separated"):
-            shutil.rmtree("separated")
+        remove_tree("separated")
 
     log(f"Successfully processed 6 stems for {song_id}!")
     return True, ""
@@ -170,6 +272,19 @@ def is_processing_requested(song):
 def mark_ready(song):
     song["stems"] = True
     song["availableStems"] = STEM_NAMES
+    song_id = str(song.get("id") or "").strip()
+    if song_id:
+        assets = song.get("assets")
+        if not isinstance(assets, dict):
+            assets = {}
+            song["assets"] = assets
+        assets["stems"] = {
+            stem: {
+                "url": f"samples/{song_id}/{stem}.wav",
+                "contentType": "audio/wav",
+            }
+            for stem in STEM_NAMES
+        }
     set_processing(song, "ready", "complete", "AI stemovi su spremni.")
 
 def mark_failed(song, stage, message):
