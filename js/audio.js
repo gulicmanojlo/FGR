@@ -1,5 +1,5 @@
 import { state, NOTE_NAMES, clamp } from "./state.js";
-import { CHANNEL_NAMES, createChannelBuses, scheduleSampleVoice } from "./piano-voice.js?v=170";
+import { CHANNEL_NAMES, createChannelBuses, scheduleSampleVoice } from "./piano-voice.js?v=173";
 import { getKeyboardChord, getMouseChord, getMobileChord } from "./keyboard.js";
 import {
   buildChordTimeline,
@@ -7,7 +7,7 @@ import {
   detectChordFromChroma,
   parseKeySignature,
   refineChordBoundaries
-} from "./chord-analysis.js?v=170";
+} from "./chord-analysis.js?v=173";
 
 // Semplovi i preseti instrumenata
 const PIANO_SAMPLE_BASE_PATH = "samples/piano/";

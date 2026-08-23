@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=170";
+} from "./audio.js?v=173";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=170";
+} from "./processing-client.js?v=173";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=170";
+} from "./chord-analysis.js?v=173";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=170";
+} from "./practice-timing.js?v=173";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,31 +69,31 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=170";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=170";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=170";
-import { createPcmWavFile } from "./pcm-wav.js?v=170";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=170";
-import { resolveMixerControls } from "./mixer-routing.js?v=170";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=170";
-import { createScorePlayer } from "./score-player.js?v=170";
+} from "./preferences.js?v=173";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=173";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=173";
+import { createPcmWavFile } from "./pcm-wav.js?v=173";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=173";
+import { resolveMixerControls } from "./mixer-routing.js?v=173";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=173";
+import { createScorePlayer } from "./score-player.js?v=173";
 import {
   deleteLocalPlaylist,
   fetchLocalPlaylists,
   loadLocalPlaylist,
   playlistSlug,
   saveLocalPlaylist
-} from "./playlists.js?v=170";
-import { renderHarmonyEvents } from "./voicing.js?v=170";
+} from "./playlists.js?v=173";
+import { renderHarmonyEvents } from "./voicing.js?v=173";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=170";
+} from "./audio-import.js?v=173";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=170";
+} from "./pcm-capture.js?v=173";
 
 import { 
   handleKeyDown, 
@@ -131,10 +131,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=170";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=170";
-import { computeMelodyFingering } from "./melody-fingering.js?v=170";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=170";
+} from "./ui-tools.js?v=173";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=173";
+import { computeMelodyFingering } from "./melody-fingering.js?v=173";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=173";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -1224,6 +1224,7 @@ async function init() {
   
   // Ucitavanje alata
   renderTool();
+  checkBackendReachable();
   window.setTimeout(() => reportRenderState("startup"), 6000);
   
   // Probno inicijalizovanje zvuka
@@ -2989,6 +2990,11 @@ async function loadPlaylistFromServer(playlist) {
     updatePlaylistMode();
     setYouTubeStatus(`Playlist: ${state.activePlaylistName}`);
     closePlaylistBrowser();
+    // Loading a playlist replaces the repertoire wholesale, which drops any
+    // song adopted from the service at startup. Songs the service has
+    // separated and analysed must survive that, or they become unreachable
+    // again the moment a playlist is opened.
+    adoptServiceLibrary();
   } catch {
     setYouTubeStatus("Playlist nije ucitana");
   }
@@ -6754,6 +6760,33 @@ function resolveDiagnosticsUrl() {
 window.addEventListener("error", (event) => {
   window.__fgrLastError = String(event?.message || "") + " @ " + String(event?.filename || "") + ":" + String(event?.lineno || "");
 });
+
+/**
+ * Is anything actually serving this app, or is it a frozen cache?
+ *
+ * A service worker will happily serve a months-old copy of the whole app with
+ * no server running at all. Nothing looks wrong: the page loads, buttons work,
+ * and every change made since then is invisible. Worse, any module the cache
+ * never stored comes back as the app shell, so startup dies halfway through
+ * and the screen simply stays empty. Both states have to announce themselves.
+ */
+async function checkBackendReachable() {
+  const banner = document.getElementById("backendWarning");
+  if (!banner) return;
+  let reachable = false;
+  try {
+    const base = String(processingClient?.baseUrl || state.processingServiceUrl || "").replace(/\/+$/, "");
+    const response = await fetch(`${base}/v1/health?probe=${Date.now()}`, { cache: "no-store" });
+    reachable = response.ok;
+  } catch (_error) {
+    reachable = false;
+  }
+  banner.hidden = reachable;
+  if (!reachable) {
+    banner.textContent =
+      "Servis za obradu nije pokrenut. Pokreni \u201ePokreni FGR\u201c \u2014 bez njega aplikacija radi iz kesa i ne vidi ni pesme ni izmene.";
+  }
+}
 
 // ---------------- POMOCNI PWA SERVISI ----------------
 function registerServiceWorker() {

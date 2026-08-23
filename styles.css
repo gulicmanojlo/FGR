@@ -5430,3 +5430,22 @@ body:has(.workbench-v2) {
   opacity: .85;
   word-break: break-word;
 }
+
+
+/* Shown when nothing is serving the app but the cache. Deliberately loud:
+   every symptom of this state looks like a different bug. */
+.backend-warning {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 10000;
+  max-width: min(680px, calc(100vw - 32px));
+  padding: 10px 16px;
+  border: 1px solid #e3b45c;
+  border-radius: 8px;
+  background: #2a1d08;
+  color: #f4e2bd;
+  font: 13px/1.5 system-ui, sans-serif;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .45);
+}
