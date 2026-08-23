@@ -1042,7 +1042,50 @@ def snap_chart_to_grid(
         if merged and merged[-1].get("n") == item.get("n"):
             continue
         merged.append(item)
-    return merged
+
+    beat_seconds = _median_beat_seconds(times)
+    # 0.25 dobe, ne vise: mereno, akordi od ~0.6 dobe sede TACNO na cujnim
+    # harmonskim udarima (uklanjanje im je pogorsalo medijanu sa 105 na 139 ms),
+    # dakle to su stvarni prolazni akordi na osmini, a ne treperenje dekodera.
+    return drop_flicker_chords(merged, 0.25 * beat_seconds if beat_seconds else 0.15)
+
+
+def _median_beat_seconds(beats: Sequence[float]) -> float:
+    intervals = sorted(beats[index + 1] - beats[index] for index in range(len(beats) - 1))
+    if not intervals:
+        return 0.0
+    return float(intervals[len(intervals) // 2])
+
+
+def drop_flicker_chords(
+    chart: Sequence[Mapping[str, Any]],
+    minimum_seconds: float,
+) -> list[dict[str, Any]]:
+    """Drop a chord that does not last long enough to be one.
+
+    A segment shorter than roughly half a beat is a decoder flicker, not a
+    harmonic change: the previous chord simply keeps sounding through it. Three
+    of these in a song is a small number and a very audible one, because the
+    player reads a change that nobody played.
+    """
+
+    items = [dict(item) for item in chart]
+    if len(items) < 2 or minimum_seconds <= 0.0:
+        return items
+
+    kept: list[dict[str, Any]] = [items[0]]
+    for index in range(1, len(items)):
+        duration = (
+            float(items[index + 1]["t"]) - float(items[index]["t"])
+            if index + 1 < len(items)
+            else minimum_seconds
+        )
+        if duration < minimum_seconds:
+            continue
+        if kept and kept[-1].get("n") == items[index].get("n"):
+            continue
+        kept.append(items[index])
+    return kept
 
 
 def build_beat_synchronous_chart(
