@@ -1,5 +1,5 @@
-import { normalizeBeatGrid } from "./beat-grid.js?v=165";
-import { createPcmWavFile } from "./pcm-wav.js?v=165";
+import { normalizeBeatGrid } from "./beat-grid.js?v=166";
+import { createPcmWavFile } from "./pcm-wav.js?v=166";
 
 /**
  * Browser client for the FGR audio-processing service.
@@ -1226,6 +1226,32 @@ export class ProcessingClient {
       ...(Number.isFinite(Number(file.lastModified)) ? { lastModified: Number(file.lastModified) } : {}),
       ...metadata
     };
+  }
+
+  async listSongs(options = {}) {
+    if (!this.configured) return [];
+    const response = await fetch(resolveServiceUrl("/v1/songs", this.baseUrl), {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      signal: options.signal
+    });
+    if (!response.ok) {
+      throw new ProcessingClientError(`Service listing failed (${response.status}).`, { code: "listing-failed" });
+    }
+    const payload = await response.json();
+    return Array.isArray(payload?.songs) ? payload.songs : [];
+  }
+
+  async deleteSong(songId, options = {}) {
+    if (!this.configured) return false;
+    const id = cleanString(songId);
+    if (!id) return false;
+    const response = await fetch(resolveServiceUrl(`/v1/songs/${id}`, this.baseUrl), {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+      signal: options.signal
+    });
+    return response.ok;
   }
 
   async requestUploadTicket(songId, file, options = {}) {

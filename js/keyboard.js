@@ -1,5 +1,5 @@
 import { state, NOTE_NAMES, clamp, readJsonStorage, writeJsonStorage, KEYBOARD_SETTINGS_STORAGE_KEY, KEYBOARD_DOUBLE_TAP_SHARP_KEYS } from "./state.js";
-import { ensureAudio, setActiveMidiSet, noteToMidi, pitchFromMidi, octaveFromMidi, recomputeSound } from "./audio.js?v=165";
+import { ensureAudio, setActiveMidiSet, noteToMidi, pitchFromMidi, octaveFromMidi, recomputeSound } from "./audio.js?v=166";
 
 // Konstante za mapiranje
 export const KEYBOARD_MAP = new Map([

@@ -1877,6 +1877,58 @@ class SongStore:
         self._lock = threading.RLock()
         self.recover_interrupted_jobs()
 
+    def list_songs(self) -> list[dict[str, Any]]:
+        """Summarise every song this service has on disk."""
+
+        songs: list[dict[str, Any]] = []
+        for directory in sorted(self.songs_root.glob("*")):
+            record_path = directory / "song.json"
+            if not record_path.is_file():
+                continue
+            try:
+                with open(record_path, encoding="utf-8") as handle:
+                    record = json.load(handle)
+            except (OSError, ValueError):
+                continue
+            stems = (record.get("assets") or {}).get("stems") or {}
+            tracks = record.get("noteTracks") or {}
+            songs.append(
+                {
+                    "songId": record.get("songId") or directory.name,
+                    "processing": record.get("processing"),
+                    "chordCount": len(record.get("chords") or []),
+                    "availableStems": [name for name in STEM_NAMES if name in stems],
+                    "noteCounts": {
+                        name: len((track or {}).get("events") or [])
+                        for name, track in tracks.items()
+                    },
+                    "beatGrid": {
+                        "bpm": (record.get("beatGrid") or {}).get("bpm"),
+                        "beatsPerBar": (record.get("beatGrid") or {}).get("beatsPerBar"),
+                    },
+                    "updatedAt": record.get("updatedAt"),
+                    "sourceName": next(
+                        (
+                            str(item.get("filename") or "")
+                            for item in reversed(record.get("uploads") or [])
+                            if item.get("filename")
+                        ),
+                        "",
+                    ),
+                }
+            )
+        return songs
+
+    def delete_song(self, song_id: str) -> bool:
+        """Remove one song and everything separated or analysed for it."""
+
+        directory = self._song_dir(song_id)
+        with self._lock:
+            if not directory.exists():
+                return False
+            shutil.rmtree(directory, ignore_errors=True)
+            return not directory.exists()
+
     def _song_dir(self, song_id: str) -> Path:
         validate_song_id(song_id)
         return self.songs_root / song_id
@@ -3088,10 +3140,21 @@ class FGRRequestHandler(BaseHTTPRequestHandler):
             raise APIError(HTTPStatus.NOT_FOUND, "not_found", "Endpoint not found.")
         return segments, validate_song_id(segments[2])
 
+    def do_DELETE(self) -> None:
+        self._dispatch(self._delete)
+
+    def _delete(self) -> None:
+        segments = self._segments()
+        if len(segments) != 3 or segments[:2] != ["v1", "songs"]:
+            raise APIError(HTTPStatus.NOT_FOUND, "not_found", "Endpoint not found.")
+        song_id = validate_song_id(segments[2])
+        removed = self.app.store.delete_song(song_id)
+        self._send_json(HTTPStatus.OK, {"songId": song_id, "removed": removed})
+
     def _options(self) -> None:
         self.send_response(HTTPStatus.NO_CONTENT)
         self._cors_headers()
-        self.send_header("Access-Control-Allow-Methods", "GET, HEAD, POST, PATCH, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, HEAD, POST, PATCH, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Accept, Content-Type, Range")
         self.send_header("Access-Control-Max-Age", "600")
         self.send_header("Content-Length", "0")
@@ -3185,6 +3248,9 @@ class FGRRequestHandler(BaseHTTPRequestHandler):
                 health,
                 head_only=head_only,
             )
+            return
+        if segments == ["v1", "songs"]:
+            self._send_json(HTTPStatus.OK, {"songs": self.app.store.list_songs()}, head_only=head_only)
             return
         segments, song_id = self._route_song()
         endpoint = segments[3]
