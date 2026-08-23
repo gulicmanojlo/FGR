@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=162";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=164";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=162";
+} from "./practice-timing.js?v=164";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=162";
+} from "./chord-editor.js?v=164";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -110,6 +110,68 @@ export function formatKey(pc, minor) {
 
 export function selectedOctave() {
   return state.baseOctave;
+}
+
+function renderNoteLane(lane, song, trackName, pixelsPerSecond) {
+  if (!lane) return;
+  var track = (song && song.noteTracks && song.noteTracks[trackName]) || null;
+  var events = track && Array.isArray(track.events) ? track.events : [];
+  if (!events.length) {
+    lane.classList.add("is-empty");
+    return;
+  }
+  lane.classList.remove("is-empty");
+
+  // Height carries the pitch, so the shape of the line is readable at any zoom.
+  // Writing every note name instead would be unreadable at normal zoom: a
+  // typical note is a fifth of a second, which is five pixels wide.
+  var lowest = Infinity;
+  var highest = -Infinity;
+  for (var scan = 0; scan < events.length; scan += 1) {
+    var pitch = Number(events[scan].midi);
+    if (!isFinite(pitch)) continue;
+    if (pitch < lowest) lowest = pitch;
+    if (pitch > highest) highest = pitch;
+  }
+  if (!isFinite(lowest)) return;
+  var span = Math.max(1, highest - lowest);
+  var names = ["C", "Cis", "D", "Dis", "E", "F", "Fis", "G", "Gis", "A", "B", "H"];
+  var topPadding = 15;
+  var usableHeight = 22;
+  var noteHeight = 7;
+
+  var fragment = document.createDocumentFragment();
+  for (var index = 0; index < events.length; index += 1) {
+    var event = events[index];
+    var startSeconds = Number(event.t);
+    var durationSeconds = Number(event.d);
+    var midi = Number(event.midi);
+    if (!isFinite(startSeconds) || !isFinite(midi)) continue;
+    if (!isFinite(durationSeconds) || durationSeconds <= 0) durationSeconds = 0.15;
+
+    var width = Math.max(3, durationSeconds * pixelsPerSecond);
+    var note = document.createElement("span");
+    note.className = "chart-note";
+    note.style.left = (startSeconds * pixelsPerSecond) + "px";
+    note.style.width = width + "px";
+    note.style.top = (topPadding + (1 - (midi - lowest) / span) * usableHeight) + "px";
+    note.style.height = noteHeight + "px";
+    note.dataset.t = String(startSeconds);
+    note.dataset.midi = String(midi);
+    var name = names[((midi % 12) + 12) % 12];
+    // Only label a note that has room for the label; the rest are read by
+    // position, and by the piano at the bottom.
+    if (width >= 20) {
+      note.textContent = name;
+      note.classList.add("has-name");
+      note.style.height = "12px";
+      note.style.lineHeight = "12px";
+    }
+    note.setAttribute("role", "listitem");
+    note.title = name + Math.floor(midi / 12 - 1) + " · " + fmtChordTime(startSeconds);
+    fragment.appendChild(note);
+  }
+  lane.appendChild(fragment);
 }
 
 function normalizePc(pc) {
@@ -1614,6 +1676,8 @@ export const TOOLS = {
             '<div class="chart-ruler" aria-hidden="true"></div>' +
             '<div class="chart-grid" aria-hidden="true"></div>' +
             '<div class="chart-chords" role="list" aria-label="Akordi pesme"></div>' +
+            '<div class="chart-line chart-line-melody" role="list" aria-label="Melodija"><span class="chart-line-tag">Melodija</span></div>' +
+            '<div class="chart-line chart-line-bass" role="list" aria-label="Bas linija"><span class="chart-line-tag">Bas</span></div>' +
             '<button class="chart-playhead" id="chartPlayhead" type="button" role="slider" aria-label="Pozicija 0:00.0" aria-valuemin="0" aria-valuemax="' + duration + '" aria-valuenow="0" aria-grabbed="false"></button>' +
           '</div>' +
         '</div>' +
@@ -1622,6 +1686,8 @@ export const TOOLS = {
     var ruler = strip.querySelector(".chart-ruler");
     var grid = strip.querySelector(".chart-grid");
     var chordLayer = strip.querySelector(".chart-chords");
+    renderNoteLane(strip.querySelector(".chart-line-melody"), currentSong, "melody", pixelsPerSecond);
+    renderNoteLane(strip.querySelector(".chart-line-bass"), currentSong, "bass", pixelsPerSecond);
 
     var tickSeconds = timelineTickSeconds(pixelsPerSecond);
     for (var second = 0; second <= displayDuration; second += tickSeconds) {

@@ -5329,3 +5329,67 @@ body:has(.workbench-v2) {
   .workbench-v2 .midi-badge { padding-inline: 7px; }
   .workbench-v2 .song-pill { display: none; }
 }
+
+/* Harmonija, melodija i bas dele jednu vremensku osu i jedan plejhed: to su
+   tri stvari koje se uče zajedno, pa nema smisla da budu na tri mesta. */
+.workbench-v2 .chart-timeline { min-height: 268px; }
+
+.workbench-v2 .chart-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 44px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.workbench-v2 .chart-line-melody { top: 126px; }
+.workbench-v2 .chart-line-bass { top: 182px; }
+
+.workbench-v2 .chart-line-tag {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-soft, var(--ink));
+  background: color-mix(in srgb, var(--panel-bg-2) 88%, transparent);
+  border-radius: 0 0 6px 0;
+  pointer-events: none;
+}
+
+.workbench-v2 .chart-line .chart-note {
+  position: absolute;
+  min-width: 3px;
+  line-height: 7px;
+  text-align: center;
+  font-size: 0;
+  border-radius: 3px;
+  overflow: visible;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+/* The name appears only where the note is long enough to hold it. */
+.workbench-v2 .chart-line .chart-note.has-name { font-size: 10px; }
+
+.workbench-v2 .chart-line-melody .chart-note {
+  background: color-mix(in srgb, var(--melody-color, #3ed38d) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--melody-color, #3ed38d) 55%, transparent);
+}
+
+.workbench-v2 .chart-line-bass .chart-note {
+  background: color-mix(in srgb, var(--harmony-color, #33a8ff) 26%, transparent);
+  border: 1px solid color-mix(in srgb, var(--harmony-color, #33a8ff) 50%, transparent);
+}
+
+.workbench-v2 .chart-line.is-empty::after {
+  content: "nema prepoznatih tonova";
+  position: sticky;
+  left: 92px;
+  font-size: 11px;
+  opacity: .55;
+  line-height: 44px;
+}
