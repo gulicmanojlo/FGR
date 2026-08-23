@@ -8,7 +8,7 @@ import {
   PLAYLIST_FILE_EXTENSION,
   PLAYLISTS_API_URL
 } from "./state.js";
-import { normalizeNoteTracks } from "./processing-client.js?v=164";
+import { normalizeNoteTracks } from "./processing-client.js?v=165";
 
 export function getGitHubToken() {
   return readSessionValue(GITHUB_TOKEN_STORAGE_KEY).trim();

@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=164";
+} from "./audio.js?v=165";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=164";
+} from "./processing-client.js?v=165";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=164";
+} from "./chord-analysis.js?v=165";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=164";
+} from "./practice-timing.js?v=165";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,24 +69,24 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=164";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=164";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=164";
-import { createPcmWavFile } from "./pcm-wav.js?v=164";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=164";
-import { resolveMixerControls } from "./mixer-routing.js?v=164";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=164";
-import { createScorePlayer } from "./score-player.js?v=164";
-import { renderHarmonyEvents } from "./voicing.js?v=164";
+} from "./preferences.js?v=165";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=165";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=165";
+import { createPcmWavFile } from "./pcm-wav.js?v=165";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=165";
+import { resolveMixerControls } from "./mixer-routing.js?v=165";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=165";
+import { createScorePlayer } from "./score-player.js?v=165";
+import { renderHarmonyEvents } from "./voicing.js?v=165";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=164";
+} from "./audio-import.js?v=165";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=164";
+} from "./pcm-capture.js?v=165";
 
 import { 
   handleKeyDown, 
@@ -128,10 +128,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=164";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=164";
-import { computeMelodyFingering } from "./melody-fingering.js?v=164";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=164";
+} from "./ui-tools.js?v=165";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=165";
+import { computeMelodyFingering } from "./melody-fingering.js?v=165";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=165";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -6649,11 +6649,30 @@ function trackPlaybackAndHighlight() {
 }
 // ---------------- POMOCNI PWA SERVISI ----------------
 function registerServiceWorker() {
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("service-worker.js").catch(() => {});
-    });
-  }
+  if (!("serviceWorker" in navigator)) return;
+
+  // A new worker calls skipWaiting and claims the open pages, but the page it
+  // claims is still running the code it was loaded with. Without this reload
+  // an update looks like it did nothing: the tab reports the new cache while
+  // executing the previous version, and the only way out was to know to press
+  // reload twice. Guarded so the reload can happen at most once per load.
+  // Only when a worker was already in charge. On a first visit there is no
+  // controller and nothing stale to escape, and reloading there would be a
+  // pointless flash at best and a reload loop at worst.
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let reloadingForUpdate = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloadingForUpdate) return;
+    reloadingForUpdate = true;
+    window.location.reload();
+  });
+
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("service-worker.js").then((registration) => {
+      // Ask on every start, so a machine left open overnight still updates.
+      registration.update().catch(() => {});
+    }).catch(() => {});
+  });
 }
 
 // Globalni FGRBridge interfejs za komunikaciju sa drugim skriptama

@@ -46,7 +46,7 @@ export async function createPcmTabRecorder(audioStream, options = {}) {
   }
 
   await context.audioWorklet.addModule(
-    new URL("./pcm-capture-worklet.js?v=164", import.meta.url).href
+    new URL("./pcm-capture-worklet.js?v=165", import.meta.url).href
   );
 
   const source = context.createMediaStreamSource(audioStream);

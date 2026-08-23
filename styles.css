@@ -5393,3 +5393,21 @@ body:has(.workbench-v2) {
   opacity: .55;
   line-height: 44px;
 }
+
+
+/* Which build is actually running, readable without opening a developer tool.
+   Every confusing hour of this project has started with the browser quietly
+   serving an older version than the one on disk. */
+#fgrBuildTag {
+  position: fixed;
+  right: 6px;
+  bottom: 4px;
+  z-index: 9999;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font: 10px/14px ui-monospace, monospace;
+  letter-spacing: .04em;
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+  background: color-mix(in srgb, var(--panel-bg-2) 70%, transparent);
+  pointer-events: none;
+}
