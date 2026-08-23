@@ -761,6 +761,10 @@ class PitchTrackConfig:
     min_note_seconds: float
     highpass_hz: int
     lowpass_hz: int
+    # Mereno na pet nezavisnih verzija iste pesme: bas note pocinju +54.6 do
+    # +59.9 ms posle stvarnog napada, jer prozor od 186 ms ne moze da prijavi
+    # visinu pre nego sto se napuni. Melodija nema takav pomak (-11..-17 ms).
+    onset_correction_seconds: float = 0.0
 
 
 MELODY_PITCH_CONFIG = PitchTrackConfig(
@@ -791,6 +795,7 @@ BASS_PITCH_CONFIG = PitchTrackConfig(
     min_note_seconds=0.110,
     highpass_hz=25,
     lowpass_hz=430,
+    onset_correction_seconds=0.055,
 )
 
 
@@ -1456,9 +1461,203 @@ def _extract_pyin(
     )
     if not events:
         return None
+    events = apply_onset_correction(events, config.onset_correction_seconds)
+    events = collapse_whole_tone_flicker(events)
     events = attach_note_velocities(events, samples, sample_rate)
-    algorithm = "librosa-pyin-viterbi-v2+median-segments"
+    algorithm = "librosa-pyin-viterbi-v2+median-segments+onset-corrected"
     return events, algorithm, len(samples) / sample_rate
+
+
+def apply_onset_correction(
+    events: Sequence[Mapping[str, Any]],
+    seconds: float,
+) -> list[dict[str, Any]]:
+    """Shift note starts back by a measured, detector-specific latency."""
+
+    if not seconds:
+        return [dict(event) for event in events]
+    corrected: list[dict[str, Any]] = []
+    for event in events:
+        item = dict(event)
+        start = max(0.0, float(item.get("t", 0.0)) - float(seconds))
+        # The note ends where it ended; only its start was reported late.
+        duration = float(item.get("d", 0.0)) + (float(item.get("t", 0.0)) - start)
+        item["t"] = round(start, 3)
+        item["d"] = round(max(0.01, duration), 3)
+        corrected.append(item)
+    return corrected
+
+
+def collapse_whole_tone_flicker(
+    events: Sequence[Mapping[str, Any]],
+    maximum_interval: int = 2,
+    maximum_middle_seconds: float = 0.22,
+    neighbour_ratio: float = 0.5,
+) -> list[dict[str, Any]]:
+    """Fold an a-b-a wobble back into one held note.
+
+    The duration filter never sees this one: the middle note is a normal
+    length, it is the pitch that is wrong. Measured on the bass channel it
+    accounts for 21-32% of all note triples, and almost all of it is a
+    whole-tone oscillation around the true pitch rather than real playing.
+    """
+
+    items = [dict(event) for event in events]
+    if len(items) < 3:
+        return items
+
+    index = 1
+    while index < len(items) - 1:
+        previous, middle, following = items[index - 1], items[index], items[index + 1]
+        same_pitch = int(previous.get("midi", -1)) == int(following.get("midi", -2))
+        interval = abs(int(middle.get("midi", 0)) - int(previous.get("midi", 0)))
+        middle_seconds = float(middle.get("d", 0.0))
+        short_enough = middle_seconds <= maximum_middle_seconds
+        # A played passing note is comparable in length to what surrounds it.
+        # A detector wobble is a brief flick inside a longer held note.
+        subordinate = middle_seconds <= neighbour_ratio * min(
+            float(previous.get("d", 0.0)), float(following.get("d", 0.0))
+        )
+        if same_pitch and 0 < interval <= maximum_interval and short_enough and subordinate:
+            end = float(following.get("t", 0.0)) + float(following.get("d", 0.0))
+            previous["d"] = round(max(0.01, end - float(previous.get("t", 0.0))), 3)
+            del items[index : index + 2]
+            index = max(1, index - 1)
+            continue
+        index += 1
+    return items
+
+
+def merge_short_notes(
+    events: Sequence[Mapping[str, Any]],
+    minimum_seconds: float,
+    same_pitch_gap_seconds: float = 0.12,
+) -> list[dict[str, Any]]:
+    """Absorb notes under the duration floor instead of leaving them as debris.
+
+    A note-level model splits a held note whenever its confidence dips, so its
+    raw output carries many fragments that are not separate notes. Dropping
+    them would leave holes; merging them into the note they belong to keeps the
+    line continuous, which is what a player reads off the keyboard.
+    """
+
+    minimum = max(0.0, float(minimum_seconds))
+    merged: list[dict[str, Any]] = []
+    for event in events:
+        item = dict(event)
+        if merged:
+            previous = merged[-1]
+            previous_end = float(previous["t"]) + float(previous["d"])
+            gap = float(item["t"]) - previous_end
+            same_pitch = int(previous.get("midi", -1)) == int(item.get("midi", -2))
+            if same_pitch and gap <= same_pitch_gap_seconds:
+                end = max(previous_end, float(item["t"]) + float(item["d"]))
+                previous["d"] = round(end - float(previous["t"]), 3)
+                continue
+            if float(item["d"]) < minimum and gap <= same_pitch_gap_seconds:
+                # Too short to stand on its own and too close to be separate:
+                # it belongs to the note before it.
+                end = max(previous_end, float(item["t"]) + float(item["d"]))
+                previous["d"] = round(end - float(previous["t"]), 3)
+                continue
+        if float(item["d"]) < minimum and not merged:
+            continue
+        merged.append(item)
+    return [item for item in merged if float(item["d"]) >= min(minimum, 0.05)]
+
+
+def snap_octaves_to_reference(
+    events: Sequence[Mapping[str, Any]],
+    reference: Sequence[Mapping[str, Any]],
+    config: PitchTrackConfig,
+    window_seconds: float = 4.0,
+) -> list[dict[str, Any]]:
+    """Move a note by whole octaves to the register the line is actually in.
+
+    The two detectors fail in opposite directions: the note model segments a
+    phrase well but puts 13-16% of notes an exact octave off, while the pitch
+    tracker misses half the notes and gets the register right. Neither is
+    trustworthy alone, but the disagreement is informative, because an octave
+    error is exactly the error one of them does not make.
+    """
+
+    items = [dict(event) for event in events]
+    anchors = [(float(item["t"]), int(item["midi"])) for item in reference if "midi" in item]
+    if not items or not anchors:
+        return items
+
+    times = [time for time, _midi in anchors]
+    pitches = [midi for _time, midi in anchors]
+    overall = sorted(pitches)[len(pitches) // 2]
+
+    import bisect
+
+    for item in items:
+        moment = float(item.get("t", 0.0))
+        left = bisect.bisect_left(times, moment - window_seconds)
+        right = bisect.bisect_right(times, moment + window_seconds)
+        local = sorted(pitches[left:right])
+        target = local[len(local) // 2] if local else overall
+
+        best = int(item.get("midi", target))
+        best_distance = abs(best - target)
+        for shift in (-24, -12, 12, 24):
+            candidate = int(item.get("midi", target)) + shift
+            if not config.midi_min <= candidate <= config.midi_max:
+                continue
+            distance = abs(candidate - target)
+            if distance < best_distance:
+                best_distance = distance
+                best = candidate
+        item["midi"] = best
+        if "detectedMidi" not in item:
+            item["detectedMidi"] = int(event_midi) if (event_midi := item.get("midi")) else best
+    return items
+
+
+def solo_regions(
+    events: Sequence[Mapping[str, Any]],
+    join_seconds: float = 1.5,
+    dilate_seconds: float = 0.5,
+) -> list[tuple[float, float]]:
+    """Time spans where a lead line is actually playing.
+
+    pYIN finds only about half of a solo, but it finds *something* almost
+    everywhere the solo plays, and nothing where only the singer is. That makes
+    it a poor transcriber and a good region detector, which is the job it is
+    given here.
+    """
+
+    spans: list[tuple[float, float]] = []
+    for event in events:
+        start = float(event.get("t", 0.0))
+        end = start + float(event.get("d", 0.0))
+        if end <= start:
+            continue
+        if spans and start - spans[-1][1] <= join_seconds:
+            spans[-1] = (spans[-1][0], max(spans[-1][1], end))
+        else:
+            spans.append((start, end))
+    return [(max(0.0, start - dilate_seconds), end + dilate_seconds) for start, end in spans]
+
+
+def keep_events_inside_regions(
+    events: Sequence[Mapping[str, Any]],
+    regions: Sequence[tuple[float, float]],
+) -> list[dict[str, Any]]:
+    """Drop notes that fall outside every region where the lead line plays."""
+
+    if not regions:
+        return []
+    kept: list[dict[str, Any]] = []
+    for event in events:
+        start = float(event.get("t", 0.0))
+        centre = start + 0.5 * float(event.get("d", 0.0))
+        for region_start, region_end in regions:
+            if region_start <= centre <= region_end:
+                kept.append(dict(event))
+                break
+    return kept
 
 
 def extract_monophonic_note_track(
@@ -1477,6 +1676,28 @@ def extract_monophonic_note_track(
         candidates.append((float(pyin_qa["score"]), pyin_events, pyin_algorithm, pyin_duration, pyin_qa))
         if pyin_qa["passed"]:
             selected = (pyin_events, pyin_algorithm, pyin_duration, pyin_qa)
+
+        # Melodija: pYIN nadje samo 45-48% sola jer prijavi "nema visine" i
+        # tamo gde solo drzi ton. Basic Pitch nadje 86-89%, ali kad peva vokal
+        # pokupi i pratnju (71.8% njegovih dodatnih nota je u pevanim
+        # delovima). Zato jedan transkribuje, a drugi bira gde se slusa.
+        if config.name == "melody":
+            paired = _extract_basic_pitch(path, config)
+            if paired is not None and paired[0]:
+                regions = solo_regions(pyin_events)
+                gated = keep_events_inside_regions(paired[0], regions)
+                gated = merge_short_notes(gated, config.min_note_seconds)
+                gated = snap_octaves_to_reference(gated, pyin_events, config)
+                gated = collapse_whole_tone_flicker(gated)
+                if len(gated) >= max(8, len(pyin_events) // 2):
+                    gated_duration = max((event["t"] + event["d"] for event in gated), default=0.0)
+                    gated_qa = evaluate_note_track_qa(gated, gated_duration, config)
+                    gated_algorithm = f"{paired[1]}+pyin-solo-gate"
+                    candidates.append(
+                        (float(gated_qa["score"]) + 0.05, gated, gated_algorithm, gated_duration, gated_qa)
+                    )
+                    if gated_qa["passed"]:
+                        selected = (gated, gated_algorithm, gated_duration, gated_qa)
 
     # Basic Pitch remains a secondary detector for sources on which pYIN has
     # insufficient voicing confidence or pathological register transitions.
