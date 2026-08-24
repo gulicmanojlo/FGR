@@ -1,5 +1,5 @@
-import { normalizeBeatGrid } from "./beat-grid.js?v=176";
-import { createPcmWavFile } from "./pcm-wav.js?v=176";
+import { normalizeBeatGrid } from "./beat-grid.js?v=177";
+import { createPcmWavFile } from "./pcm-wav.js?v=177";
 
 /**
  * Browser client for the FGR audio-processing service.
@@ -1240,6 +1240,18 @@ export class ProcessingClient {
     }
     const payload = await response.json();
     return Array.isArray(payload?.songs) ? payload.songs : [];
+  }
+
+  async chordAccuracy(songId, options = {}) {
+    if (!this.configured) return null;
+    const id = cleanString(songId);
+    if (!id) return null;
+    const response = await fetch(
+      resolveServiceUrl(`/v1/songs/${id}/chord-accuracy`, this.baseUrl) + `?cache=${Date.now()}`,
+      { method: "GET", headers: { Accept: "application/json" }, signal: options.signal }
+    );
+    if (!response.ok) return null;
+    return await response.json();
   }
 
   async deleteSong(songId, options = {}) {

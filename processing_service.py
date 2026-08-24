@@ -46,6 +46,7 @@ from typing import Any, Callable, Mapping
 from urllib.parse import unquote, urlsplit
 
 from beat_grid import BEAT_GRID_SCHEMA_VERSION, detect_beat_grid
+import chord_accuracy
 from chord_pipeline import extract_chord_chart
 
 
@@ -3382,6 +3383,26 @@ class FGRRequestHandler(BaseHTTPRequestHandler):
                     "availableStems": [name for name in STEM_NAMES if name in ((record.get("assets") or {}).get("stems") or {})],
                 },
             }
+            self._send_json(HTTPStatus.OK, payload, head_only=head_only)
+            return
+        if endpoint == "chord-accuracy" and len(segments) == 4:
+            record = self.app.store.read(song_id)
+            provenance = (record.get("chordProvenance") or {}).get("origin")
+            reference = record.get("chords") or []
+            candidate = record.get("aiCandidateChords") or []
+            if provenance != "manual-edit":
+                # Without a correction there is no reference: comparing the
+                # machine against itself would report a perfect score.
+                payload = {
+                    "songId": song_id,
+                    "status": "no-reference",
+                    "message": "Ispravi bar jedan akord da bi poređenje imalo smisla.",
+                    "referenceCount": len(reference),
+                    "candidateCount": len(candidate),
+                }
+            else:
+                payload = {"songId": song_id, **chord_accuracy.compare_charts(reference, candidate)}
+                payload["summary"] = chord_accuracy.summarise(payload)
             self._send_json(HTTPStatus.OK, payload, head_only=head_only)
             return
         if endpoint == "assets" and len(segments) == 4:

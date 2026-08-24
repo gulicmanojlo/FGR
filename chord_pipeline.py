@@ -8,7 +8,7 @@ so their timing behaviour can be covered by small deterministic tests.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -1301,6 +1301,26 @@ def extract_chord_chart(
     # na prvu dobu takta, pa mreža kao obavezna rešetka premešta granicu dalje
     # od onoga što se čuje.
     grid_beats = [float(value) for value in ((beat_grid or {}).get("beats") or [])]
+
+    # How long a chord has to last before it is believed. The limit was written
+    # in seconds, and 0.90 s was chosen while this song was thought to run at
+    # 152 BPM, where it means a little over two beats. At its real 115 BPM the
+    # same number silently became 1.7 beats, so a chord held for a beat and a
+    # half was deleted for being too short — including one a musician heard and
+    # had to put back by hand. A chord shorter than a beat is worth doubting; a
+    # chord of a beat and a half is ordinary music, whatever the tempo.
+    # A beat and a half, measured against a musician's corrections on real
+    # material: at 1.73 beats (the old fixed 0.90 s) five chords he could hear
+    # were deleted; at 1.5 beats three of them return and eight new ones appear
+    # for him to judge; below that the count climbs without recovering more.
+    beat_seconds = _median_beat_seconds(grid_beats)
+    if beat_seconds > 0.0:
+        minimum_seconds = max(0.40, round(1.5 * beat_seconds, 3))
+        options = replace(
+            options,
+            minimum_segment_seconds=minimum_seconds,
+            hard_minimum_segment_seconds=max(0.18, round(0.5 * minimum_seconds, 3)),
+        )
 
     if reference_chords:
         return refine_reference_chord_chart_from_features(
