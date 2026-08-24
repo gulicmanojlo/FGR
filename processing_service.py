@@ -1616,6 +1616,71 @@ def snap_octaves_to_reference(
     return items
 
 
+def sustain_note_events(
+    events: Sequence[Mapping[str, Any]],
+    maximum_gap_seconds: float,
+) -> list[dict[str, Any]]:
+    """Hold a note until the next one starts, when nothing happened between.
+
+    A plucked bass decays, so the pitch tracker loses confidence long before
+    the note is over and reports the end there. Measured on this song, 276 of
+    289 bass notes came out exactly half a beat long — not a bass line but a
+    row of stabs, which is what makes the piano sound choppy against a part
+    the ear hears as sustained. Where the next note follows close enough that
+    nothing else can have happened in between, the note is held to meet it.
+    """
+
+    items = [dict(event) for event in events]
+    if len(items) < 2 or maximum_gap_seconds <= 0.0:
+        return items
+    for index in range(len(items) - 1):
+        start = float(items[index].get("t", 0.0))
+        end = start + float(items[index].get("d", 0.0))
+        next_start = float(items[index + 1].get("t", 0.0))
+        gap = next_start - end
+        if 0.0 < gap <= maximum_gap_seconds:
+            items[index]["d"] = round(next_start - start, 3)
+    return items
+
+
+def align_events_to_beats(
+    events: Sequence[Mapping[str, Any]],
+    beats: Sequence[float],
+    tolerance_seconds: float,
+) -> list[dict[str, Any]]:
+    """Pull a note start onto the beat it is clearly reaching for.
+
+    Only within the tolerance: a bass playing off the beat on purpose keeps
+    its own time, and a note far from any beat is not a mistimed beat note.
+    """
+
+    items = [dict(event) for event in events]
+    grid = sorted(float(value) for value in beats)
+    if not items or len(grid) < 2 or tolerance_seconds <= 0.0:
+        return items
+
+    import bisect
+
+    for item in items:
+        start = float(item.get("t", 0.0))
+        position = bisect.bisect_left(grid, start)
+        best = None
+        best_distance = tolerance_seconds
+        for index in (position - 1, position, position + 1):
+            if 0 <= index < len(grid):
+                distance = abs(grid[index] - start)
+                if distance <= best_distance:
+                    best_distance = distance
+                    best = grid[index]
+        if best is None:
+            continue
+        # The note ends where it ended; only its reported start moves.
+        end = start + float(item.get("d", 0.0))
+        item["t"] = round(max(0.0, best), 3)
+        item["d"] = round(max(0.05, end - item["t"]), 3)
+    return items
+
+
 def solo_regions(
     events: Sequence[Mapping[str, Any]],
     join_seconds: float = 1.5,
@@ -1796,12 +1861,18 @@ def _melody_candidate_score(track: Mapping[str, Any], source_stem: str) -> float
 def extract_practice_note_tracks(
     stems: Mapping[str, Path],
     progress: Callable[[str, str, str], None] | None = None,
+    beat_grid: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Transcribe actual lead and bass events from aligned separated stems."""
 
     if progress:
         progress("analyzing", "note-transcription", "Transcribing time-aligned melody and bass notes.")
     note_tracks: dict[str, dict[str, Any]] = {}
+    beats = [float(value) for value in ((beat_grid or {}).get("beats") or [])]
+    beat_seconds = 0.0
+    if len(beats) > 2:
+        spacings = sorted(beats[i + 1] - beats[i] for i in range(len(beats) - 1))
+        beat_seconds = spacings[len(spacings) // 2]
     bass_path = stems.get("bass")
     if bass_path is not None:
         try:
@@ -1865,6 +1936,27 @@ def extract_practice_note_tracks(
             "confidence": 0.0,
             "message": "No instrumental stem is available for lead-melody transcription.",
         }
+    if beat_seconds > 0.0:
+        subdivisions = sorted(beats + [
+            (beats[index] + beats[index + 1]) / 2.0 for index in range(len(beats) - 1)
+        ])
+        for name, track in note_tracks.items():
+            events = track.get("events") or []
+            if not events:
+                continue
+            # A sustained part reported as a row of stabs is what makes the
+            # piano sound choppy against a line the ear hears as held.
+            events = sustain_note_events(events, beat_seconds * (1.0 if name == "bass" else 0.5))
+            # Against the beats alone the bass looked badly timed: only 49% of
+            # its notes within 50 ms. Against half beats, 78% land within
+            # 50 ms with a median of 4 ms — the part plays eighths, and pulling
+            # those onto quarter notes was moving correct playing off its own
+            # beat. Chords are different: the musician put 97% of his on whole
+            # beats, so only the note tracks use the finer grid.
+            events = align_events_to_beats(events, subdivisions, min(0.070, beat_seconds * 0.16))
+            track["events"] = events
+            track["algorithm"] = str(track.get("algorithm") or "") + "+sustained+beat-aligned"
+
     return normalize_note_tracks(note_tracks)
 
 
@@ -2817,7 +2909,7 @@ class ExistingStemProcessor:
             # discard six otherwise valid separated stems. The browser keeps a
             # slower fallback for this uncommon dependency/data failure.
             LOGGER.warning("Chord analysis failed for %s: %s", song_id, exc, exc_info=True)
-        note_tracks = extract_practice_note_tracks(stems, progress)
+        note_tracks = extract_practice_note_tracks(stems, progress, beat_grid=beat_grid)
         return ProcessingResult(stems=stems, chords=chords, note_tracks=note_tracks, beat_grid=beat_grid)
 
     @staticmethod

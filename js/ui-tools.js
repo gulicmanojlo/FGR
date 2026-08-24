@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=184";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=185";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=184";
+} from "./practice-timing.js?v=185";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=184";
+} from "./chord-editor.js?v=185";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -779,8 +779,62 @@ function requestChordDeletion(song, index) {
   if (window.FGRBridge?.removeChordFromSelected(index) && state.tool === "chart") renderTool();
 }
 
+function buildChordCell({ chord, index, chords, strip, duration, pixelsPerSecond, chordEndTime, currentSong }) {
+  const cell = document.createElement("div");
+  cell.className = "cc";
+  cell.tabIndex = 0;
+  cell.dataset.t = chord.t;
+  cell.dataset.index = String(index);
+  const geometry = chordSegmentGeometry(chords, index, duration, pixelsPerSecond, chordEndTime);
+  cell.style.left = geometry.left + "px";
+  cell.style.width = geometry.width + "px";
+  cell.style.top = "8px";
+  cell.setAttribute("role", "listitem");
+  cell.setAttribute("aria-label", transposeChordName(chord.n) + " od " + fmtChordTime(geometry.start) + " do " + fmtChordTime(geometry.end));
+  cell.innerHTML =
+    '<button class="cc-edge cc-edge-left" type="button" aria-label="Promeni početak akorda"></button>' +
+    '<button class="cc-move-surface" type="button" aria-label="Pomeri akord"><span class="n">' + transposeChordName(chord.n) + '</span><span class="t">' + fmtChordTime(chord.t) + '</span><span class="cc-duration">' + geometry.duration.toFixed(1) + ' s</span></button>' +
+    '<button class="cc-edge cc-edge-right" type="button" aria-label="Promeni kraj akorda"></button>' +
+    '<output class="cc-live-time" aria-hidden="true"></output>';
+  bindChordBoundaryInteractions({ strip, cell, chord, index, chords, duration, pixelsPerSecond, currentSong });
+  return cell;
+}
+
 function commitChordListUpdate(chords) {
-  if (window.FGRBridge?.setChordsForSelected(chords) && state.tool === "chart") renderTool();
+  if (!window.FGRBridge?.setChordsForSelected(chords) || state.tool !== "chart") return;
+  // Rebuilding the whole panel for one edit tears down the timeline, the
+  // rulers and the note lanes and builds them again — visibly, as a flash and
+  // a jump, on every cut and every undo. Only the chord cells changed, so only
+  // they are redrawn; everything else keeps its DOM and its scroll.
+  if (!refreshChartChordCells()) renderTool();
+}
+
+/**
+ * Redraw just the chord row inside the existing timeline.
+ *
+ * Returns false when the panel is not in a state this can patch, so the caller
+ * can fall back to a full render rather than leaving a stale chart.
+ */
+function refreshChartChordCells() {
+  const strip = document.getElementById("ccStrip");
+  const layer = strip?.querySelector(".chart-chords");
+  if (!strip || !layer) return false;
+  const song = state.repertoire.find((entry) => entry.id === state.selectedSongId) || null;
+  const chords = song?.chords;
+  if (!Array.isArray(chords)) return false;
+
+  const duration = Math.max(0, Number(strip.dataset.duration) || 0);
+  const pixelsPerSecond = normalizeTimelineZoom(strip.dataset.pixelsPerSecond);
+  const chordEndTime = resolveChordEndTime(chords, duration, Number(strip.dataset.chordEndTime));
+
+  const fragment = document.createDocumentFragment();
+  chords.forEach((chord, index) => {
+    fragment.appendChild(buildChordCell({
+      chord, index, chords, strip, duration, pixelsPerSecond, chordEndTime, currentSong: song
+    }));
+  });
+  layer.replaceChildren(fragment);
+  return true;
 }
 
 function stripSplitOptions(strip) {
@@ -1798,24 +1852,9 @@ export const TOOLS = {
       chordLayer.appendChild(empty);
     } else {
       chords.forEach(function (chord, index) {
-        var cell = document.createElement("div");
-        cell.className = "cc";
-        cell.tabIndex = 0;
-        cell.dataset.t = chord.t;
-        cell.dataset.index = String(index);
-        var geometry = chordSegmentGeometry(chords, index, duration, pixelsPerSecond, chordEndTime);
-        cell.style.left = geometry.left + "px";
-        cell.style.width = geometry.width + "px";
-        cell.style.top = "8px";
-        cell.setAttribute("role", "listitem");
-        cell.setAttribute("aria-label", transposeChordName(chord.n) + " od " + fmtChordTime(geometry.start) + " do " + fmtChordTime(geometry.end));
-        cell.innerHTML =
-          '<button class="cc-edge cc-edge-left" type="button" aria-label="Promeni početak akorda"></button>' +
-          '<button class="cc-move-surface" type="button" aria-label="Pomeri akord"><span class="n">' + transposeChordName(chord.n) + '</span><span class="t">' + fmtChordTime(chord.t) + '</span><span class="cc-duration">' + geometry.duration.toFixed(1) + ' s</span></button>' +
-          '<button class="cc-edge cc-edge-right" type="button" aria-label="Promeni kraj akorda"></button>' +
-          '<output class="cc-live-time" aria-hidden="true"></output>';
-        bindChordBoundaryInteractions({ strip, cell, chord, index, chords, duration, pixelsPerSecond, currentSong });
-        chordLayer.appendChild(cell);
+        chordLayer.appendChild(buildChordCell({
+          chord, index, chords, strip, duration, pixelsPerSecond, chordEndTime, currentSong
+        }));
       });
       strip.dataset.lanes = "1";
     }
