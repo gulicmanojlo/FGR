@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=181";
+} from "./audio.js?v=183";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=181";
+} from "./processing-client.js?v=183";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=181";
+} from "./chord-analysis.js?v=183";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=181";
+} from "./practice-timing.js?v=183";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,31 +69,31 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=181";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=181";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=181";
-import { createPcmWavFile } from "./pcm-wav.js?v=181";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=181";
-import { resolveMixerControls } from "./mixer-routing.js?v=181";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=181";
-import { createScorePlayer } from "./score-player.js?v=181";
+} from "./preferences.js?v=183";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=183";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=183";
+import { createPcmWavFile } from "./pcm-wav.js?v=183";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=183";
+import { resolveMixerControls } from "./mixer-routing.js?v=183";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=183";
+import { createScorePlayer } from "./score-player.js?v=183";
 import {
   deleteLocalPlaylist,
   fetchLocalPlaylists,
   loadLocalPlaylist,
   playlistSlug,
   saveLocalPlaylist
-} from "./playlists.js?v=181";
-import { renderHarmonyEvents } from "./voicing.js?v=181";
+} from "./playlists.js?v=183";
+import { renderHarmonyEvents } from "./voicing.js?v=183";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=181";
+} from "./audio-import.js?v=183";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=181";
+} from "./pcm-capture.js?v=183";
 
 import { 
   handleKeyDown, 
@@ -131,10 +131,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=181";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=181";
-import { computeMelodyFingering } from "./melody-fingering.js?v=181";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=181";
+} from "./ui-tools.js?v=183";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=183";
+import { computeMelodyFingering } from "./melody-fingering.js?v=183";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=183";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -4245,11 +4245,65 @@ function deleteSong(songId) {
     ? "\n\nOvo je snimak sa YouTube-a — ako ga obrišeš, snimanje mora ponovo."
     : "";
   const detail = parts.length ? `\n\nGubi se: ${parts.join(", ")}.` : "";
-  const confirmed = window.confirm(
-    `Obrisati "${removed?.title || songId}" iz repertoara?${detail}${warning}`
-      + "\n\nObrada se sklanja u korpu na servisu, pa se može vratiti ručno."
-  );
-  if (!confirmed) return;
+  askConfirmation({
+    title: "Obrisati pesmu?",
+    body: `"${removed?.title || songId}"${detail}${warning}`,
+    note: "Obrada se sklanja u korpu na servisu, pa se može vratiti ručno.",
+    confirmLabel: "Obriši",
+    onConfirm: () => finishSongDeletion(songId, index, removed)
+  });
+}
+
+/**
+ * The app's own question, in the middle of the screen.
+ *
+ * Deleting a song throws away minutes of separation and, for a recording,
+ * audio that cannot be obtained again, so the question has to be legible and
+ * has to say what is at stake. The browser's own dialog can do neither.
+ */
+function askConfirmation({ title, body, note, confirmLabel, onConfirm }) {
+  const existing = document.getElementById("fgrConfirmDialog");
+  if (existing) existing.remove();
+
+  const host = document.createElement("div");
+  host.id = "fgrConfirmDialog";
+  host.className = "fgr-confirm";
+  host.innerHTML =
+    '<div class="fgr-confirm-backdrop"></div>'
+    + '<div class="fgr-confirm-panel" role="dialog" aria-modal="true">'
+    + '<h2 class="fgr-confirm-title"></h2>'
+    + '<p class="fgr-confirm-body"></p>'
+    + '<p class="fgr-confirm-note"></p>'
+    + '<div class="fgr-confirm-actions">'
+    + '<button type="button" class="text-button fgr-confirm-cancel">Odustani</button>'
+    + '<button type="button" class="text-button primary-button fgr-confirm-ok"></button>'
+    + "</div></div>";
+  host.querySelector(".fgr-confirm-title").textContent = title || "Jesi li siguran?";
+  host.querySelector(".fgr-confirm-body").textContent = body || "";
+  const noteNode = host.querySelector(".fgr-confirm-note");
+  if (note) noteNode.textContent = note;
+  else noteNode.remove();
+  host.querySelector(".fgr-confirm-ok").textContent = confirmLabel || "U redu";
+
+  const close = () => {
+    host.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (event) => {
+    if (event.key === "Escape") close();
+  };
+  host.querySelector(".fgr-confirm-cancel").addEventListener("click", close);
+  host.querySelector(".fgr-confirm-backdrop").addEventListener("click", close);
+  host.querySelector(".fgr-confirm-ok").addEventListener("click", () => {
+    close();
+    onConfirm?.();
+  });
+  document.addEventListener("keydown", onKey);
+  document.body.append(host);
+  host.querySelector(".fgr-confirm-ok").focus();
+}
+
+function finishSongDeletion(songId, index, removed) {
   const poll = processingPolls.get(songId);
   if (poll?.cancel) poll.cancel("song-deleted");
   processingPolls.delete(songId);
@@ -6935,6 +6989,30 @@ document.addEventListener("keydown", (event) => {
 
 document.addEventListener("click", (event) => {
   if (event.target?.closest?.("#chartFocusToggle")) toggleChartFocus();
+});
+
+// Mark a channel the separator returned empty, so a silent fader stops looking
+// like a broken one.
+const STEM_CHANNEL_LABELS = {
+  vocals: "Vokal",
+  bass: "Bas",
+  drums: "Bubnjevi",
+  guitar: "Gitara",
+  other: "Melodija / solo",
+  piano: "Harmonija / pratnja"
+};
+
+window.addEventListener("fgr:stemlevel", (event) => {
+  const { stem, silent } = event.detail || {};
+  const label = STEM_CHANNEL_LABELS[stem];
+  if (!label) return;
+  const channel = [...document.querySelectorAll(".mixer-channel")]
+    .find((node) => node.querySelector(".chan-label")?.textContent.trim() === label);
+  if (!channel) return;
+  channel.classList.add("stem-row");
+  channel.classList.toggle("is-silent", Boolean(silent));
+  const slider = channel.querySelector(".mixer-vol");
+  if (slider) slider.title = silent ? `${label}: separator nije našao ovaj instrument u pesmi` : "";
 });
 
 // ---------------- POMOCNI PWA SERVISI ----------------

@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=181";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=183";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=181";
+} from "./practice-timing.js?v=183";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=181";
+} from "./chord-editor.js?v=183";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -814,7 +814,21 @@ function stripPlayheadTime(strip) {
  * by ear, 97% of his changes land on a whole beat. Snapping only inside half a
  * beat, so a deliberate off-beat placement further out is left alone.
  */
+function chartSnapEnabled() {
+  return readJsonStorage("fgr-chart-snap-v1", { on: true })?.on !== false;
+}
+
+function setChartSnapEnabled(on) {
+  writeJsonStorage("fgr-chart-snap-v1", { on: Boolean(on) });
+  const button = document.getElementById("chartSnapToggle");
+  if (button) {
+    button.classList.toggle("is-on", Boolean(on));
+    button.textContent = on ? "⧉ Snap na dobe" : "⧉ Slobodno";
+  }
+}
+
 function snapTimeToBeat(time) {
+  if (!chartSnapEnabled()) return Number(time);
   const beats = window.FGRBridge?.getBeatTimes?.() || [];
   const moment = Number(time);
   if (!Array.isArray(beats) || beats.length < 2 || !Number.isFinite(moment)) return moment;
@@ -984,6 +998,12 @@ function bindChartZoomControls(options) {
     const current = normalizeTimelineZoom(strip.dataset.pixelsPerSecond);
     applyZoom(stepTimelineZoom(current, event.deltaY < 0 ? 1 : -1), event.clientX);
   }, { passive: false });
+
+  const snapButton = shell.querySelector("#chartSnapToggle");
+  if (snapButton) {
+    setChartSnapEnabled(chartSnapEnabled());
+    snapButton.addEventListener("click", () => setChartSnapEnabled(!chartSnapEnabled()));
+  }
 
   const jumpButton = shell.querySelector("#chartJumpToPlayhead");
   if (jumpButton) jumpButton.addEventListener("click", () => {
@@ -1735,6 +1755,7 @@ export const TOOLS = {
             '<button type="button" data-chart-zoom="in" aria-label="Uvećaj timeline">+</button>' +
           '</div>' +
           '<small>Ctrl + točkić</small>' +
+          '<button type="button" class="chart-snap-toggle" id="chartSnapToggle" title="Kada je uključeno, sečenje i pomeranje akorda padaju na dobu">⧉ Snap na dobe</button>' +
           '<button type="button" class="chart-focus-toggle" id="chartFocusToggle" title="Uvećaj chart preko celog ekrana (Esc za izlaz)">⛶ Ceo ekran</button>' +
         '</div>' +
         '<div class="chart-accuracy" id="chartAccuracy" hidden></div>' +

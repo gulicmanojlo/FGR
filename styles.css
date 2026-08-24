@@ -4398,7 +4398,7 @@ body:has(.workbench-v2) {
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: 34px minmax(0, 1fr);
+  grid-template-rows: 34px auto minmax(0, 1fr);
 }
 .workbench-v2 .chart-zoom-bar {
   display: flex;
@@ -5249,7 +5249,7 @@ body:has(.workbench-v2) {
   .workbench-v2 .studio-practice-cta { height: 44px; }
   .workbench-v2 .tool-head { flex-basis: 43px; min-height: 43px; }
   .workbench-v2 .tool-body { padding: 5px 12px 5px; overflow: hidden; }
-  .workbench-v2 .chart-timeline-shell { grid-template-rows: 28px minmax(0, 1fr); }
+  .workbench-v2 .chart-timeline-shell { grid-template-rows: 28px auto minmax(0, 1fr); }
   .workbench-v2 .chart-zoom-bar { padding-bottom: 3px; }
   .workbench-v2 .chart-zoom-controls { height: 23px; }
   .workbench-v2 .chart-zoom-bar .chart-playhead-jump { height: 23px; padding: 0 8px; }
@@ -5605,5 +5605,118 @@ body:has(.workbench-v2) {
 .workbench-v2 .chart-timeline.is-razor *,
 .workbench-v2 .chart-timeline.is-razor .cc,
 .workbench-v2 .chart-timeline.is-razor .cc * {
-  cursor: crosshair !important;
+  cursor: text !important;
+}
+
+
+/* The snap switch sits with the other timeline controls and shows its state,
+   because whether an edit lands on the beat or where the hand put it is the
+   difference between a chart and a sketch. */
+.workbench-v2 .chart-snap-toggle {
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.workbench-v2 .chart-snap-toggle.is-on {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--ink);
+}
+
+
+/* ---------------- POTVRDA ---------------- */
+
+.fgr-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: grid;
+  place-items: center;
+}
+
+.fgr-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, .55);
+}
+
+.fgr-confirm-panel {
+  position: relative;
+  width: min(420px, calc(100vw - 40px));
+  padding: 20px 22px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-bg);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, .5);
+}
+
+.fgr-confirm-title {
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+
+.fgr-confirm-body {
+  margin: 0 0 8px;
+  color: var(--ink);
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+.fgr-confirm-note {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.fgr-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* A channel with nothing in it is not a control, it is a question the person
+   has to answer for themselves. The 6-stem model emits a piano track for every
+   song; on one without a piano it is silence, and a fader over silence reads
+   as something broken. */
+.workbench-v2 .stem-row.is-silent {
+  opacity: .38;
+}
+
+.workbench-v2 .stem-row.is-silent .chan-label::after {
+  content: " — nema u ovoj pesmi";
+  font-size: 10px;
+  letter-spacing: .02em;
+}
+
+
+/* ---------------- DONJA TRAKA ---------------- */
+/* The controls were laid out in one unbroken row with space-between, so on a
+   narrow window they crushed together and the octave selector ended up on top
+   of its neighbour. Groups now wrap onto a second line and keep their spacing
+   instead of stealing each other's. */
+.dock .piano-settings-grid {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 6px 14px;
+  row-gap: 6px;
+}
+
+.dock .piano-settings-group {
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The octave stepper carried a negative margin to pull it into the row; with
+   wrapping that turns into an overlap. */
+.dock .tool-octave,
+.dock .piano-settings-group .segmented {
+  margin-left: 0;
+  margin-right: 0;
 }

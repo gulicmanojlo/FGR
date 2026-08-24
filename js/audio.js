@@ -1,5 +1,5 @@
 import { state, NOTE_NAMES, clamp } from "./state.js";
-import { CHANNEL_NAMES, createChannelBuses, scheduleSampleVoice } from "./piano-voice.js?v=181";
+import { CHANNEL_NAMES, createChannelBuses, scheduleSampleVoice } from "./piano-voice.js?v=183";
 import { getKeyboardChord, getMouseChord, getMobileChord } from "./keyboard.js";
 import {
   buildChordTimeline,
@@ -7,7 +7,7 @@ import {
   detectChordFromChroma,
   parseKeySignature,
   refineChordBoundaries
-} from "./chord-analysis.js?v=181";
+} from "./chord-analysis.js?v=183";
 
 // Semplovi i preseti instrumenata
 const PIANO_SAMPLE_BASE_PATH = "samples/piano/";
@@ -998,6 +998,37 @@ function fetchStemWithLegacyFallback(url) {
   });
 }
 
+/**
+ * Peak level of a separated channel, published for the mixer.
+ *
+ * A separator always returns every channel it was asked for, whether or not
+ * the instrument is in the song. What comes back for an absent instrument is
+ * the model's noise floor, some 50 dB below the others — inaudible, but with a
+ * fader, a mute and a solo button sitting over it as if it were a part.
+ */
+function reportStemLevel(name, buffer) {
+  let peak = 0;
+  let squares = 0;
+  let samples = 0;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const data = buffer.getChannelData(channel);
+    const stride = Math.max(1, Math.floor(data.length / 240000));
+    for (let index = 0; index < data.length; index += stride) {
+      const value = data[index];
+      const magnitude = value < 0 ? -value : value;
+      if (magnitude > peak) peak = magnitude;
+      squares += value * value;
+      samples += 1;
+    }
+  }
+  const rms = samples ? Math.sqrt(squares / samples) : 0;
+  // -45 dBFS peak: far under anything played, far over digital silence.
+  const silent = peak < 0.0056;
+  window.dispatchEvent(new CustomEvent("fgr:stemlevel", {
+    detail: { stem: name, peak, rms, silent }
+  }));
+}
+
 export function recRate() {
   return state.playbackRate;
 }
@@ -1465,6 +1496,7 @@ function loadStemRecording(ctx, id, song, generation) {
       .then((data) => data ? ctx.decodeAudioData(data) : null)
       .then((buffer) => {
         if (buffer) stems[name] = buffer;
+        if (buffer) reportStemLevel(name, buffer);
       });
   });
   const mixPromise = loadOriginalMixBuffer(ctx, id, song);
