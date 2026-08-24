@@ -1743,6 +1743,27 @@ def extract_monophonic_note_track(
         if pyin_qa["passed"]:
             selected = (pyin_events, pyin_algorithm, pyin_duration, pyin_qa)
 
+        # Bas: pYIN mu pogadja visinu (97% tonova iz akorda, mereno prema
+        # tabeli koju je muzicar potvrdio sluhom) ali propusta note — cuje se
+        # 36% pesme, a bas linija svira gotovo neprekidno. Basic Pitch ih nadje
+        # (569 naspram 289), samo mu registar beži: 2.25 oktave umesto 0.92.
+        # Zato jedan nadje note, a drugi kaze u kojoj su oktavi.
+        if config.name == "bass":
+            paired = _extract_basic_pitch(path, config)
+            if paired is not None and paired[0]:
+                combined = merge_short_notes(paired[0], config.min_note_seconds)
+                combined = snap_octaves_to_reference(combined, pyin_events, config)
+                combined = collapse_whole_tone_flicker(combined)
+                if len(combined) >= len(pyin_events):
+                    combined_duration = max((event["t"] + event["d"] for event in combined), default=0.0)
+                    combined_qa = evaluate_note_track_qa(combined, combined_duration, config)
+                    combined_algorithm = f"{paired[1]}+pyin-register"
+                    candidates.append(
+                        (float(combined_qa["score"]) + 0.05, combined, combined_algorithm, combined_duration, combined_qa)
+                    )
+                    if combined_qa["passed"]:
+                        selected = (combined, combined_algorithm, combined_duration, combined_qa)
+
         # Melodija: pYIN nadje samo 45-48% sola jer prijavi "nema visine" i
         # tamo gde solo drzi ton. Basic Pitch nadje 86-89%, ali kad peva vokal
         # pokupi i pratnju (71.8% njegovih dodatnih nota je u pevanim
@@ -1937,9 +1958,12 @@ def extract_practice_note_tracks(
             "message": "No instrumental stem is available for lead-melody transcription.",
         }
     if beat_seconds > 0.0:
-        subdivisions = sorted(beats + [
-            (beats[index] + beats[index + 1]) / 2.0 for index in range(len(beats) - 1)
-        ])
+        subdivisions = []
+        for index in range(len(beats) - 1):
+            step = (beats[index + 1] - beats[index]) / 4.0
+            subdivisions.extend(beats[index] + step * part for part in range(4))
+        subdivisions.append(beats[-1])
+        subdivisions.sort()
         for name, track in note_tracks.items():
             events = track.get("events") or []
             if not events:

@@ -926,7 +926,51 @@ class BeatGridNormalizationTests(unittest.TestCase):
 
 
 class NoteTranscriptionTests(unittest.TestCase):
-    def test_pyin_is_primary_when_its_quality_gate_passes(self):
+    def test_both_detectors_run_for_bass_and_the_pair_is_preferred(self):
+        """The bass is transcribed by one detector and placed by the other.
+
+        pYIN gets the pitch right — 97% of its notes are tones of the chord the
+        musician confirmed by ear — but reports the bass sounding for 36% of a
+        song whose bass line barely stops. Basic Pitch finds twice as many
+        notes and puts them an octave out. Neither is usable alone, so both run
+        and the paired result is preferred when it passes the quality gate.
+        """
+
+        pyin_event = {"t": 0.0, "d": 0.5, "midi": 45, "confidence": 0.9}
+        basic_events = [
+            {"t": 0.0, "d": 0.5, "midi": 45, "confidence": 0.9},
+            {"t": 0.6, "d": 0.5, "midi": 47, "confidence": 0.9},
+        ]
+        passed = {
+            "passed": True,
+            "reasons": [],
+            "score": 0.9,
+            "confidence": 0.9,
+            "eventCount": 2,
+            "eventRate": 1.0,
+            "voicedCoverage": 0.5,
+            "ultraShortCount": 0,
+            "ultraShortRate": 0.0,
+            "adjacentPairs": 0,
+            "octaveJumps": 0,
+            "octaveJumpRate": 0.0,
+            "largeLeaps": 0,
+            "largeLeapRate": 0.0,
+        }
+        with mock.patch("processing_service._extract_pyin", return_value=([pyin_event], "librosa-pyin-test", 1.0)):
+            with mock.patch("processing_service.evaluate_note_track_qa", return_value=passed):
+                with mock.patch(
+                    "processing_service._extract_basic_pitch",
+                    return_value=(basic_events, "basic-pitch-test"),
+                ) as basic_pitch:
+                    track = extract_monophonic_note_track("unused.wav", BASS_PITCH_CONFIG, "bass")
+
+        basic_pitch.assert_called_once()
+        self.assertEqual(track["status"], "ready")
+        self.assertIn("pyin-register", track["algorithm"])
+        self.assertEqual(len(track["events"]), 2)
+
+    def test_pyin_alone_is_kept_when_the_pair_finds_no_more_notes(self):
         event = {"t": 0.0, "d": 0.5, "midi": 45, "confidence": 0.9}
         passed = {
             "passed": True,
@@ -946,10 +990,13 @@ class NoteTranscriptionTests(unittest.TestCase):
         }
         with mock.patch("processing_service._extract_pyin", return_value=([event], "librosa-pyin-test", 1.0)):
             with mock.patch("processing_service.evaluate_note_track_qa", return_value=passed):
-                with mock.patch("processing_service._extract_basic_pitch") as basic_pitch:
+                with mock.patch(
+                    "processing_service._extract_basic_pitch",
+                    return_value=([], "basic-pitch-test"),
+                ) as basic_pitch:
                     track = extract_monophonic_note_track("unused.wav", BASS_PITCH_CONFIG, "bass")
 
-        basic_pitch.assert_not_called()
+        basic_pitch.assert_called_once()
         self.assertEqual(track["status"], "ready")
         self.assertTrue(track["algorithm"].startswith("librosa-pyin-test"))
         self.assertEqual(track["events"][0]["midi"], 45)

@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=185";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=187";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=185";
+} from "./practice-timing.js?v=187";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=185";
+} from "./chord-editor.js?v=187";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -137,8 +137,13 @@ function renderNoteLane(lane, song, trackName, pixelsPerSecond) {
   var span = Math.max(1, highest - lowest);
   var names = ["C", "Cis", "D", "Dis", "E", "F", "Fis", "G", "Gis", "A", "B", "H"];
   var topPadding = 15;
-  var usableHeight = 22;
-  var noteHeight = 7;
+  // The pitch range is drawn into whatever height the lane actually has. It
+  // used to be a hard-coded 22px inside a 44px lane, which flattened the line
+  // into a row of pills — the shape of a melody is the first thing a player
+  // reads, and it was the one thing not being shown.
+  var laneHeight = Math.max(40, lane.clientHeight || 44);
+  var noteHeight = laneHeight >= 90 ? 9 : 7;
+  var usableHeight = Math.max(18, laneHeight - topPadding - noteHeight - 6);
 
   var fragment = document.createDocumentFragment();
   for (var index = 0; index < events.length; index += 1) {

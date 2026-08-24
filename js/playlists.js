@@ -8,7 +8,7 @@
  * playlist points at are separated and analysed here; the list belongs here too.
  */
 
-import { state } from "./state.js?v=185";
+import { state } from "./state.js?v=187";
 
 function serviceBaseUrl() {
   const base = String(state.processingServiceUrl || "http://127.0.0.1:8765").trim();

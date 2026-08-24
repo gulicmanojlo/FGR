@@ -4400,6 +4400,13 @@ body:has(.workbench-v2) {
   display: grid;
   grid-template-rows: 34px auto minmax(0, 1fr);
 }
+
+/* Pinned, not ordered. When the middle element was removed the timeline slid
+   into the auto row and lost half its height without anything else changing —
+   the same failure that once put the whole chart into a 66px row. */
+.workbench-v2 .chart-timeline-shell > .chart-zoom-bar { grid-row: 1; }
+.workbench-v2 .chart-timeline-shell > .chart-accuracy { grid-row: 2; }
+.workbench-v2 .chart-timeline-shell > .chart-timeline-scroll { grid-row: 3; }
 .workbench-v2 .chart-zoom-bar {
   display: flex;
   align-items: center;
@@ -5349,12 +5356,15 @@ body:has(.workbench-v2) {
   position: absolute;
   left: 0;
   right: 0;
-  height: 44px;
+  /* The two lanes share whatever is left under the chords, instead of taking
+     44px each and leaving the rest of the panel empty. */
+  height: calc((100% - 108px) / 2 - 6px);
+  min-height: 44px;
   border-top: 1px solid var(--line-soft);
 }
 
-.workbench-v2 .chart-line-melody { top: 126px; }
-.workbench-v2 .chart-line-bass { top: 182px; }
+.workbench-v2 .chart-line-melody { top: 100px; }
+.workbench-v2 .chart-line-bass { top: calc(100px + (100% - 108px) / 2 + 6px); }
 
 .workbench-v2 .chart-line-tag {
   position: sticky;
