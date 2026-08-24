@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=183";
+} from "./audio.js?v=184";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=183";
+} from "./processing-client.js?v=184";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=183";
+} from "./chord-analysis.js?v=184";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=183";
+} from "./practice-timing.js?v=184";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,31 +69,31 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=183";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=183";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=183";
-import { createPcmWavFile } from "./pcm-wav.js?v=183";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=183";
-import { resolveMixerControls } from "./mixer-routing.js?v=183";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=183";
-import { createScorePlayer } from "./score-player.js?v=183";
+} from "./preferences.js?v=184";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=184";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=184";
+import { createPcmWavFile } from "./pcm-wav.js?v=184";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=184";
+import { resolveMixerControls } from "./mixer-routing.js?v=184";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=184";
+import { createScorePlayer } from "./score-player.js?v=184";
 import {
   deleteLocalPlaylist,
   fetchLocalPlaylists,
   loadLocalPlaylist,
   playlistSlug,
   saveLocalPlaylist
-} from "./playlists.js?v=183";
-import { renderHarmonyEvents } from "./voicing.js?v=183";
+} from "./playlists.js?v=184";
+import { renderHarmonyEvents } from "./voicing.js?v=184";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=183";
+} from "./audio-import.js?v=184";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=183";
+} from "./pcm-capture.js?v=184";
 
 import { 
   handleKeyDown, 
@@ -131,10 +131,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=183";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=183";
-import { computeMelodyFingering } from "./melody-fingering.js?v=183";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=183";
+} from "./ui-tools.js?v=184";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=184";
+import { computeMelodyFingering } from "./melody-fingering.js?v=184";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=184";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -6929,11 +6929,11 @@ document.addEventListener("keydown", (event) => {
 /**
  * How far the machine's chart is from the one this musician corrected.
  *
- * The reference is not a corpus somebody annotated for the purpose — it is
- * whatever the user already fixed by ear, which the service keeps beside the
- * machine's own attempt. So the score costs nobody any extra work, and it
- * measures the only thing that decides whether this app is any good: whether
- * a chord change is drawn where the player hears it.
+ * A development instrument, deliberately not shown in the interface. It says
+ * things like "20 missing, 17 extra", which to the person using the app reads
+ * as a list of mistakes they have to go and fix, when it is really a score for
+ * the analysis. The service serves the same numbers at
+ * GET /v1/songs/:id/chord-accuracy, which is where they belong.
  */
 async function refreshChordAccuracy() {
   const holder = document.getElementById("chartAccuracy");

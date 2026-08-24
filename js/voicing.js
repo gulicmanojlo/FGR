@@ -12,7 +12,7 @@
  * Sve je čisto i deterministički, pa se raspored može testirati bez zvuka.
  */
 
-import { beatPositionAt, hasUsableBeats, timeAtBeatPosition } from "./beat-grid.js?v=183";
+import { beatPositionAt, hasUsableBeats, timeAtBeatPosition } from "./beat-grid.js?v=184";
 
 const DEFAULT_CHORD_RANGE = [50, 76];
 const DEFAULT_BASS_RANGE = [28, 52];
