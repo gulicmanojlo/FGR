@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=177";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=178";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=177";
+} from "./practice-timing.js?v=178";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=177";
+} from "./chord-editor.js?v=178";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -806,9 +806,35 @@ function stripPlayheadTime(strip) {
   return clampTime(Number.isFinite(live) ? live : 0);
 }
 
+/**
+ * Move an edited moment onto the nearest beat.
+ *
+ * A chord change that sits between beats is either a mistake or a push, and
+ * for this repertoire it is a mistake: in a chart this song's player corrected
+ * by ear, 97% of his changes land on a whole beat. Snapping only inside half a
+ * beat, so a deliberate off-beat placement further out is left alone.
+ */
+function snapTimeToBeat(time) {
+  const beats = window.FGRBridge?.getBeatTimes?.() || [];
+  const moment = Number(time);
+  if (!Array.isArray(beats) || beats.length < 2 || !Number.isFinite(moment)) return moment;
+  let best = moment;
+  let bestDistance = Infinity;
+  for (const beat of beats) {
+    const distance = Math.abs(Number(beat) - moment);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = Number(beat);
+    }
+    if (Number(beat) > moment + 2) break;
+  }
+  const spacing = (Number(beats[beats.length - 1]) - Number(beats[0])) / (beats.length - 1);
+  return bestDistance <= spacing * 0.5 ? best : moment;
+}
+
 function requestChordSplit(song, index, time, strip) {
   if (!song?.chords?.[index]) return;
-  const result = splitChordSegment(song.chords, index, time, stripSplitOptions(strip));
+  const result = splitChordSegment(song.chords, index, snapTimeToBeat(time), stripSplitOptions(strip));
   if (!result.changed) return;
   commitChordListUpdate(result.chords);
 }
@@ -1029,6 +1055,43 @@ function bindChartTimelineInteractions(strip) {
     markChartManualScroll(scroll);
     try { strip.releasePointerCapture(capturedPointerId); } catch (_error) {}
   };
+
+  // Alt turns the pointer into a razor: click a chord and it splits exactly
+  // where you clicked, without moving the view. Correcting a chart means
+  // cutting a held chord in two over and over, and going through a menu — which
+  // splits at the playhead and redraws the panel — costs a gesture and a place
+  // in the song every time.
+  const applyRazorCursor = (event) => {
+    strip.classList.toggle("is-razor", Boolean(event.altKey));
+  };
+  strip.addEventListener("pointermove", applyRazorCursor);
+  strip.addEventListener("pointerenter", applyRazorCursor);
+  strip.addEventListener("pointerleave", () => strip.classList.remove("is-razor"));
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Alt") strip.classList.add("is-razor");
+  });
+  window.addEventListener("keyup", (event) => {
+    if (event.key === "Alt") strip.classList.remove("is-razor");
+  });
+
+  strip.addEventListener("click", (event) => {
+    const cell = event.target.closest(".cc");
+    if (!cell) return;
+    const song = state.repertoire.find((entry) => entry.id === state.selectedSongId) || null;
+    if (!song?.chords?.length) return;
+    const index = Number(cell.dataset.index);
+    if (!Number.isFinite(index) || !song.chords[index]) return;
+
+    if (event.altKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      requestChordSplit(song, index, timeAtPointer(event), strip);
+      return;
+    }
+    // A plain click sounds the chord. Reading a chart by eye is not how a
+    // player checks it; hearing the chord against the recording is.
+    previewChordInEditor(song.chords[index].n);
+  });
 
   strip.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || event.target.closest(".cc")) return;
@@ -1773,8 +1836,23 @@ export function renderTool() {
   if (state.tool !== "vezba") {
     setMidiOnChordCallback(null);
   }
+  // Editing a chord rebuilds this panel from scratch, which throws away the
+  // scroll position with it. For anyone correcting a chart by ear that is the
+  // difference between working and hunting: the edit lands three minutes into
+  // the song and the view snaps back to the first bar.
+  const previousScroll = document.querySelector(".chart-timeline-scroll");
+  const keepLeft = previousScroll ? previousScroll.scrollLeft : null;
+  const keepTop = previousScroll ? previousScroll.scrollTop : null;
+
   try {
     TOOLS[state.tool]();
+    if (keepLeft !== null) {
+      const restored = document.querySelector(".chart-timeline-scroll");
+      if (restored) {
+        restored.scrollLeft = keepLeft;
+        restored.scrollTop = keepTop;
+      }
+    }
   } catch (error) {
     // A blank panel is the worst possible report: it looks identical to "no
     // data", to "not loaded yet" and to "this feature does nothing", and it

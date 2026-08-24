@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=177";
+} from "./audio.js?v=178";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=177";
+} from "./processing-client.js?v=178";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=177";
+} from "./chord-analysis.js?v=178";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=177";
+} from "./practice-timing.js?v=178";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,31 +69,31 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=177";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=177";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=177";
-import { createPcmWavFile } from "./pcm-wav.js?v=177";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=177";
-import { resolveMixerControls } from "./mixer-routing.js?v=177";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=177";
-import { createScorePlayer } from "./score-player.js?v=177";
+} from "./preferences.js?v=178";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=178";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=178";
+import { createPcmWavFile } from "./pcm-wav.js?v=178";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=178";
+import { resolveMixerControls } from "./mixer-routing.js?v=178";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=178";
+import { createScorePlayer } from "./score-player.js?v=178";
 import {
   deleteLocalPlaylist,
   fetchLocalPlaylists,
   loadLocalPlaylist,
   playlistSlug,
   saveLocalPlaylist
-} from "./playlists.js?v=177";
-import { renderHarmonyEvents } from "./voicing.js?v=177";
+} from "./playlists.js?v=178";
+import { renderHarmonyEvents } from "./voicing.js?v=178";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=177";
+} from "./audio-import.js?v=178";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=177";
+} from "./pcm-capture.js?v=178";
 
 import { 
   handleKeyDown, 
@@ -131,10 +131,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=177";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=177";
-import { computeMelodyFingering } from "./melody-fingering.js?v=177";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=177";
+} from "./ui-tools.js?v=178";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=178";
+import { computeMelodyFingering } from "./melody-fingering.js?v=178";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=178";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -963,13 +963,14 @@ function renderBeatGridLines(grid, song, displayDuration, pixelsPerSecond) {
   grid.classList.toggle("has-beat-grid", Boolean(beatGrid && state.showBeatGrid !== false));
   if (!beatGrid || state.showBeatGrid === false) return;
 
-  // Samo taktovne crte. One su deo notnog pisma i pomažu da se harta čita u
-  // taktovima; pojedinačni bitovi su dijagnostika, ne informacija za nekoga
-  // ko uči pesmu.
+  // Bar lines and the beats inside them. Bar lines alone were the right call
+  // for reading a chart while playing, but correcting one is a different job:
+  // a chord change belongs on a beat, and without the beats drawn there is no
+  // way to see whether it landed on one.
   beatGrid.beats.forEach((time, index) => {
-    if (time > displayDuration || !isDownbeatIndex(beatGrid, index)) return;
+    if (time > displayDuration) return;
     const line = document.createElement("i");
-    line.className = "beat-line is-downbeat";
+    line.className = isDownbeatIndex(beatGrid, index) ? "beat-line is-downbeat" : "beat-line is-beat";
     line.style.left = `${time * pixelsPerSecond}px`;
     grid.append(line);
   });
@@ -6862,6 +6863,11 @@ window.FGRBridge = {
   },
   getDuration() {
     return getHeroDuration();
+  },
+  /** Beat times of the selected song, so an edit can land on one. */
+  getBeatTimes() {
+    const beatGrid = songBeatGrid(getSelectedSong());
+    return Array.isArray(beatGrid?.beats) ? beatGrid.beats : [];
   },
   seekTo(seconds) {
     return seekSelectedPlaybackTo(seconds);

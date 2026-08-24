@@ -5540,3 +5540,39 @@ body:has(.workbench-v2) {
   font-size: 11.5px;
   line-height: 1.5;
 }
+
+
+/* In full screen the work area must not eat the keyboard. The dock keeps its
+   own height and the chart takes what is left, rather than the other way
+   round — a chart with no keyboard under it cannot be checked by ear. */
+.workbench-v2.chart-focus .dock {
+  flex: 0 0 auto;
+}
+
+.workbench-v2.chart-focus .piano-area {
+  min-height: 200px;
+}
+
+.workbench-v2.chart-focus .work {
+  min-height: 0;
+}
+
+
+/* The razor. Alt over the timeline says what the next click will do, the way
+   a cutting tool does in a video editor. */
+.workbench-v2 .chart-timeline.is-razor,
+.workbench-v2 .chart-timeline.is-razor .cc {
+  cursor: crosshair;
+}
+
+.workbench-v2 .chart-timeline .cc {
+  cursor: pointer;
+}
+
+
+/* Beats inside the bar: present enough to aim at, faint enough that the bar
+   lines still read as the stronger division. */
+.workbench-v2 .chart-grid i.beat-line.is-beat {
+  opacity: .30;
+  border-left-style: dotted;
+}

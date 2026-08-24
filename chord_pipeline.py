@@ -1320,6 +1320,15 @@ def extract_chord_chart(
             options,
             minimum_segment_seconds=minimum_seconds,
             hard_minimum_segment_seconds=max(0.18, round(0.5 * minimum_seconds, 3)),
+            # Half a beat, so a boundary lands on the beat it belongs to and
+            # nowhere else. An earlier version used a fixed 100 ms because
+            # snapping measured worse — but that was measured against a grid
+            # running at 152 BPM when the song is at 115, so the beats it was
+            # snapping to were not the beats. Against a chart this song's
+            # player corrected by ear, 97% of his changes sit on a whole beat,
+            # and snapping the machine to whole beats moves it from 67% to 82%
+            # of boundaries within 50 ms of his.
+            grid_snap_seconds=round(0.5 * beat_seconds, 3),
         )
 
     if reference_chords:

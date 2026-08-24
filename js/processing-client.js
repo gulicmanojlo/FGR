@@ -1,5 +1,5 @@
-import { normalizeBeatGrid } from "./beat-grid.js?v=177";
-import { createPcmWavFile } from "./pcm-wav.js?v=177";
+import { normalizeBeatGrid } from "./beat-grid.js?v=178";
+import { createPcmWavFile } from "./pcm-wav.js?v=178";
 
 /**
  * Browser client for the FGR audio-processing service.
