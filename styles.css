@@ -5576,3 +5576,34 @@ body:has(.workbench-v2) {
   opacity: .30;
   border-left-style: dotted;
 }
+
+
+.workbench-v2 .chart-history-button {
+  min-width: 26px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.workbench-v2 .chart-history-button:disabled {
+  opacity: .32;
+  cursor: default;
+}
+
+.workbench-v2 .chart-history-button:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+/* The razor has to be visible on the chord itself, which is the thing being
+   cut — a cursor that only changes over the empty track says nothing. */
+.workbench-v2 .chart-timeline.is-razor,
+.workbench-v2 .chart-timeline.is-razor *,
+.workbench-v2 .chart-timeline.is-razor .cc,
+.workbench-v2 .chart-timeline.is-razor .cc * {
+  cursor: crosshair !important;
+}

@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=178";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=181";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=178";
+} from "./practice-timing.js?v=181";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=178";
+} from "./chord-editor.js?v=181";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -1726,6 +1726,8 @@ export const TOOLS = {
       '<div class="chart-timeline-shell">' +
         '<div class="chart-zoom-bar">' +
           '<button type="button" class="chart-playhead-jump" id="chartJumpToPlayhead" title="Skroluj timeline na trenutnu poziciju plejheda">⌖ Na plejhed</button>' +
+          '<button type="button" class="chart-history-button" id="chartUndo" title="Poništi poslednju izmenu akorda (Ctrl+Z)" disabled>↶</button>' +
+          '<button type="button" class="chart-history-button" id="chartRedo" title="Vrati poništenu izmenu (Ctrl+Shift+Z)" disabled>↷</button>' +
           '<span>Zum timelinea</span>' +
           '<div class="chart-zoom-controls" role="group" aria-label="Zum timelinea">' +
             '<button type="button" data-chart-zoom="out" aria-label="Umanji timeline">&minus;</button>' +

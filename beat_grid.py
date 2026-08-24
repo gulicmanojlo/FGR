@@ -893,6 +893,48 @@ def repair_beat_outliers(
     return repaired, changes
 
 
+def regularise_beats(
+    beats: Sequence[float],
+    maximum_median_drift: float = 0.025,
+    maximum_single_drift: float = 0.120,
+) -> tuple[list[float], float, bool]:
+    """Replace tracked beats with an even pulse when the band played to one.
+
+    The tracker reports beats on its own analysis frames, so even a song played
+    to a click comes back with the spacing jumping between two neighbouring
+    frame counts — on this song 520 ms and 540 ms, alternating. Musically the
+    difference is nothing; on screen it is a row of grid lines that are visibly
+    not evenly spaced, and a musician reads that as the analysis being wrong
+    about the rhythm.
+
+    A straight line is fitted through the beat times. If the real beats stay
+    close to it, the performance is metronomic and the fitted pulse is the
+    better answer — evenly spaced, and closer to the true beat than the frame
+    lattice allows. If they do not, the band is moving and the tracked beats
+    are kept, because then the unevenness is the music.
+
+    Returns the beats, the fitted tempo in BPM, and whether it was applied.
+    """
+
+    np = _numpy()
+    times = np.asarray(sorted(float(value) for value in beats), dtype=np.float64)
+    if times.size < 8:
+        return [float(value) for value in times], 0.0, False
+
+    index = np.arange(times.size, dtype=np.float64)
+    design = np.vstack([index, np.ones(times.size)]).T
+    spacing, origin = np.linalg.lstsq(design, times, rcond=None)[0]
+    if not np.isfinite(spacing) or spacing <= 0.0:
+        return [float(value) for value in times], 0.0, False
+
+    fitted = spacing * index + origin
+    drift = np.abs(times - fitted)
+    if float(np.median(drift)) > maximum_median_drift or float(drift.max()) > maximum_single_drift:
+        return [float(value) for value in times], 60.0 / spacing, False
+
+    return [round(float(value), 4) for value in fitted], 60.0 / spacing, True
+
+
 def build_model_beat_grid(
     beats: Sequence[float],
     downbeats: Sequence[float],
@@ -1009,6 +1051,7 @@ def detect_beat_grid(
     beats = [float(value) for value in np.atleast_1d(beats)]
     downbeats = [float(value) for value in np.atleast_1d(downbeats)]
     beats, repaired_count = repair_beat_outliers(beats)
+    beats, fitted_bpm, regular = regularise_beats(beats)
     if len(beats) < options.minimum_beats:
         return build_model_beat_grid(
             [], [], source_stems=used_stems, algorithm="beat-this-v1", agreement=0.0, config=options
@@ -1037,4 +1080,7 @@ def detect_beat_grid(
     )
     if isinstance(grid, dict) and isinstance(grid.get("qa"), dict):
         grid["qa"]["repairedBeats"] = int(repaired_count)
+        grid["qa"]["evenPulse"] = bool(regular)
+        if regular:
+            grid["qa"]["fittedBpm"] = round(float(fitted_bpm), 3)
     return grid

@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=178";
+} from "./audio.js?v=181";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=178";
+} from "./processing-client.js?v=181";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=178";
+} from "./chord-analysis.js?v=181";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=178";
+} from "./practice-timing.js?v=181";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,31 +69,31 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=178";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=178";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=178";
-import { createPcmWavFile } from "./pcm-wav.js?v=178";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=178";
-import { resolveMixerControls } from "./mixer-routing.js?v=178";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=178";
-import { createScorePlayer } from "./score-player.js?v=178";
+} from "./preferences.js?v=181";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=181";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=181";
+import { createPcmWavFile } from "./pcm-wav.js?v=181";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=181";
+import { resolveMixerControls } from "./mixer-routing.js?v=181";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=181";
+import { createScorePlayer } from "./score-player.js?v=181";
 import {
   deleteLocalPlaylist,
   fetchLocalPlaylists,
   loadLocalPlaylist,
   playlistSlug,
   saveLocalPlaylist
-} from "./playlists.js?v=178";
-import { renderHarmonyEvents } from "./voicing.js?v=178";
+} from "./playlists.js?v=181";
+import { renderHarmonyEvents } from "./voicing.js?v=181";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=178";
+} from "./audio-import.js?v=181";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=178";
+} from "./pcm-capture.js?v=181";
 
 import { 
   handleKeyDown, 
@@ -131,10 +131,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=178";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=178";
-import { computeMelodyFingering } from "./melody-fingering.js?v=178";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=178";
+} from "./ui-tools.js?v=181";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=181";
+import { computeMelodyFingering } from "./melody-fingering.js?v=181";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=181";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -1225,7 +1225,9 @@ async function init() {
   
   // Ucitavanje alata
   renderTool();
-  refreshChordAccuracy();
+  // The song's chords arrive from the service after this point, so the first
+  // read has to wait for them.
+  window.setTimeout(refreshChordAccuracy, 3000);
   checkBackendReachable();
   window.setTimeout(() => reportRenderState("startup"), 6000);
   
@@ -6791,6 +6793,122 @@ async function checkBackendReachable() {
 }
 
 /**
+ * Undo for chord editing.
+ *
+ * Correcting a chart by ear is guesswork made of small experiments: split
+ * here, rename that, move this one a beat earlier and listen again. Without a
+ * way back, a wrong guess costs the work done since — so people stop trying
+ * things, which is exactly the opposite of what correcting by ear needs.
+ *
+ * The history holds whole chord lists rather than edits. A chart is a few
+ * hundred small objects, so a hundred of them costs little, and restoring one
+ * cannot half-fail the way replaying inverse operations can.
+ */
+const CHORD_HISTORY_LIMIT = 100;
+const chordHistory = new Map();
+
+function chordHistoryFor(songId) {
+  let entry = chordHistory.get(songId);
+  if (!entry) {
+    entry = { past: [], future: [] };
+    chordHistory.set(songId, entry);
+  }
+  return entry;
+}
+
+function pushChordHistory(song) {
+  if (!song?.id || !Array.isArray(song.chords)) return;
+  const entry = chordHistoryFor(song.id);
+  entry.past.push(JSON.stringify(song.chords));
+  if (entry.past.length > CHORD_HISTORY_LIMIT) entry.past.shift();
+  // A new edit is a new branch: whatever was undone is no longer ahead.
+  entry.future.length = 0;
+  updateChordHistoryButtons();
+}
+
+function applyChordHistory(direction) {
+  const song = getSelectedSong();
+  if (!song?.id) return;
+  const entry = chordHistoryFor(song.id);
+  const from = direction === "undo" ? entry.past : entry.future;
+  const to = direction === "undo" ? entry.future : entry.past;
+  if (!from.length) return;
+
+  to.push(JSON.stringify(song.chords || []));
+  const restored = JSON.parse(from.pop());
+  song.chords = restored;
+  reconcileSongChordEndTime(song);
+  saveRepertoire();
+  patchSongChordsOnService(song);
+  updateSelectedSongPanel();
+  renderMiniChart();
+  if (state.tool === "chart") renderTool();
+  updateChordHistoryButtons();
+  refreshChordAccuracy();
+  setPipeStatus(direction === "undo" ? "Poništeno" : "Vraćeno");
+}
+
+function updateChordHistoryButtons() {
+  const song = getSelectedSong();
+  const entry = song?.id ? chordHistoryFor(song.id) : { past: [], future: [] };
+  const undo = document.getElementById("chartUndo");
+  const redo = document.getElementById("chartRedo");
+  if (undo) undo.disabled = !entry.past.length;
+  if (redo) redo.disabled = !entry.future.length;
+}
+
+document.addEventListener("click", (event) => {
+  if (event.target?.closest?.("#chartUndo")) applyChordHistory("undo");
+  else if (event.target?.closest?.("#chartRedo")) applyChordHistory("redo");
+});
+
+document.addEventListener("keydown", (event) => {
+  if (!(event.ctrlKey || event.metaKey)) return;
+  const key = String(event.key || "").toLowerCase();
+  if (key !== "z" && key !== "y") return;
+  const target = event.target;
+  if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+  event.preventDefault();
+  applyChordHistory(key === "y" || event.shiftKey ? "redo" : "undo");
+});
+
+/**
+ * How far the machine's chart is from the one this musician corrected.
+ *
+ * The reference is not a corpus somebody annotated for the purpose — it is
+ * whatever the user already fixed by ear, which the service keeps beside the
+ * machine's own attempt. So the score costs nobody any extra work, and it
+ * measures the only thing that decides whether this app is any good: whether
+ * a chord change is drawn where the player hears it.
+ */
+async function refreshChordAccuracy() {
+  const holder = document.getElementById("chartAccuracy");
+  if (!holder) return;
+  const song = getSelectedSong();
+  if (!song || !processingClient?.configured) {
+    holder.hidden = true;
+    return;
+  }
+  let report = null;
+  try {
+    report = await processingClient.chordAccuracy(song.id);
+  } catch (_error) {
+    holder.hidden = true;
+    return;
+  }
+  if (!report || report.status !== "ok") {
+    holder.hidden = true;
+    return;
+  }
+  holder.hidden = false;
+  holder.textContent = report.summary || "";
+  holder.title =
+    `Poređenje sa tvojim ispravkama: ${report.matched} od ${report.referenceCount} granica upareno, `
+    + `unutar 100 ms ${Math.round((report.within100Ms || 0) * 100)}%, `
+    + `pogrešan osnovni ton ${report.wrongRootCount}.`;
+}
+
+/**
  * Chart across the whole window: transport above, keyboard below.
  *
  * Correcting chords by ear means reading a long timeline and clicking small
@@ -6908,6 +7026,7 @@ window.FGRBridge = {
     const song = getSelectedSong();
     if (!song || !Array.isArray(chords)) return false;
     
+    pushChordHistory(song);
     song.chords = chords
       .map((chord) => ({ t: Math.max(0, Math.round((Number(chord?.t) || 0) * 1000) / 1000), n: String(chord?.n || "").trim() }))
       .filter((chord) => chord.n)
@@ -6918,6 +7037,9 @@ window.FGRBridge = {
     patchSongChordsOnService(song);
     updateSelectedSongPanel();
     renderMiniChart();
+    // The score is only meaningful once there is a correction to score, so it
+    // is refreshed exactly when one is made.
+    window.setTimeout(refreshChordAccuracy, 400);
     return true;
   },
   removeChordFromSelected(index) {
