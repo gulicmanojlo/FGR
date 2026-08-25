@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=189";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=190";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=189";
+} from "./practice-timing.js?v=190";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=189";
+} from "./chord-editor.js?v=190";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -276,10 +276,13 @@ function renderNoteLane(lane, song, trackName, pixelsPerSecond) {
   var events = track && Array.isArray(track.events) ? track.events : [];
   if (!events.length) {
     lane.classList.add("is-empty");
+    lane.querySelectorAll(".chart-note").forEach((node) => node.remove());
     bindNoteLaneInteractions(lane, trackName, pixelsPerSecond);
     return;
   }
   lane.classList.remove("is-empty");
+  // Only the notes: the lane also holds its name tag, which stays.
+  lane.querySelectorAll(".chart-note").forEach((node) => node.remove());
 
   // Height carries the pitch, so the shape of the line is readable at any zoom.
   // Writing every note name instead would be unreadable at normal zoom: a
@@ -1061,6 +1064,7 @@ function setChartLaneVisible(lane, visible) {
 
 function applyChartLaneVisibility(strip) {
   if (!strip) return;
+  strip.classList.toggle("hide-chords", !chartLaneVisible("chords"));
   strip.classList.toggle("hide-melody", !chartLaneVisible("melody"));
   strip.classList.toggle("hide-bass", !chartLaneVisible("bass"));
 }
@@ -1372,7 +1376,7 @@ function bindChartTimelineInteractions(strip) {
   });
 
   strip.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || event.target.closest(".cc")) return;
+    if (event.button !== 0 || event.target.closest(".cc") || event.target.closest(".chart-line")) return;
     event.preventDefault();
     pointerId = event.pointerId;
     strip.setPointerCapture(pointerId);
@@ -1391,7 +1395,7 @@ function bindChartTimelineInteractions(strip) {
   strip.addEventListener("lostpointercapture", (event) => finishScrub(event, false));
 
   strip.addEventListener("contextmenu", (event) => {
-    if (event.target.closest(".cc")) return;
+    if (event.target.closest(".cc") || event.target.closest(".chart-line")) return;
     event.preventDefault();
     const song = state.repertoire.find((entry) => entry.id === state.selectedSongId) || null;
     if (!song) return;
@@ -2014,6 +2018,7 @@ export const TOOLS = {
           '</div>' +
           '<small>Ctrl + točkić</small>' +
           '<span class="chart-lane-switches" role="group" aria-label="Vidljivi kanali">' +
+            '<button type="button" class="chart-lane-switch" data-lane="chords" title="Prikaži ili sakrij akorde">Akordi</button>' +
             '<button type="button" class="chart-lane-switch" data-lane="melody" title="Prikaži ili sakrij melodiju">Melodija</button>' +
             '<button type="button" class="chart-lane-switch" data-lane="bass" title="Prikaži ili sakrij bas">Bas</button>' +
           '</span>' +

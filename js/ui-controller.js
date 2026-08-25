@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=189";
+} from "./audio.js?v=190";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=189";
+} from "./processing-client.js?v=190";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=189";
+} from "./chord-analysis.js?v=190";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=189";
+} from "./practice-timing.js?v=190";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,31 +69,31 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=189";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=189";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=189";
-import { createPcmWavFile } from "./pcm-wav.js?v=189";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=189";
-import { resolveMixerControls } from "./mixer-routing.js?v=189";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=189";
-import { createScorePlayer } from "./score-player.js?v=189";
+} from "./preferences.js?v=190";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=190";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=190";
+import { createPcmWavFile } from "./pcm-wav.js?v=190";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=190";
+import { resolveMixerControls } from "./mixer-routing.js?v=190";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=190";
+import { createScorePlayer } from "./score-player.js?v=190";
 import {
   deleteLocalPlaylist,
   fetchLocalPlaylists,
   loadLocalPlaylist,
   playlistSlug,
   saveLocalPlaylist
-} from "./playlists.js?v=189";
-import { renderHarmonyEvents } from "./voicing.js?v=189";
+} from "./playlists.js?v=190";
+import { renderHarmonyEvents } from "./voicing.js?v=190";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=189";
+} from "./audio-import.js?v=190";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=189";
+} from "./pcm-capture.js?v=190";
 
 import { 
   handleKeyDown, 
@@ -131,10 +131,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=189";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=189";
-import { computeMelodyFingering } from "./melody-fingering.js?v=189";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=189";
+} from "./ui-tools.js?v=190";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=190";
+import { computeMelodyFingering } from "./melody-fingering.js?v=190";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=190";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);

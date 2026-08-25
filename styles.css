@@ -5797,3 +5797,27 @@ body:has(.workbench-v2) {
   /* Alt-click on empty track adds a note, so the lane itself is a target. */
   pointer-events: auto;
 }
+
+
+/* With the chords hidden the lanes move up into the space they leave. */
+.workbench-v2 .chart-timeline.hide-chords .chart-chords {
+  display: none;
+}
+
+.workbench-v2 .chart-timeline.hide-chords .chart-line-melody {
+  top: 34px;
+}
+
+.workbench-v2 .chart-timeline.hide-chords .chart-line-bass {
+  top: calc(34px + (100% - 42px) / 2 + 6px);
+}
+
+.workbench-v2 .chart-timeline.hide-chords .chart-line {
+  height: calc((100% - 42px) / 2 - 6px);
+}
+
+.workbench-v2 .chart-timeline.hide-chords.hide-melody .chart-line-bass,
+.workbench-v2 .chart-timeline.hide-chords.hide-bass .chart-line-melody {
+  top: 34px;
+  height: calc(100% - 42px);
+}
