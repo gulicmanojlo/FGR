@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=190";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=193";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=190";
+} from "./practice-timing.js?v=193";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=190";
+} from "./chord-editor.js?v=193";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -183,6 +183,7 @@ function bindNoteLaneInteractions(lane, trackName, pixelsPerSecond) {
     const pixelsPerSemitone = Math.max(4, (lane.clientHeight - 28) / span);
     let moved = false;
     let latest = { ...original };
+    let sounded = startMidi;
 
     const onMove = (moveEvent) => {
       const dx = moveEvent.clientX - startX;
@@ -199,6 +200,19 @@ function bindNoteLaneInteractions(lane, trackName, pixelsPerSecond) {
       };
       target.style.left = (latest.t * perSecond) + "px";
       target.title = `${latest.midi}`;
+      // Every semitone crossed is played as it is crossed: dragging a note to
+      // the right pitch is a thing done by ear, and silence while dragging
+      // makes it guesswork against a picture.
+      if (latest.midi !== sounded) {
+        sounded = latest.midi;
+        previewNoteMidi(latest.midi);
+        const rect = lane.getBoundingClientRect();
+        const pitches2 = events.map((item) => Number(item.midi)).filter(Number.isFinite);
+        const low = Math.min(...pitches2);
+        const high = Math.max(...pitches2);
+        const range = Math.max(1, high - low);
+        target.style.top = (15 + (1 - (latest.midi - low) / range) * Math.max(18, rect.height - 15 - 16 - 6)) + "px";
+      }
     };
 
     const onUp = () => {
@@ -210,7 +224,6 @@ function bindNoteLaneInteractions(lane, trackName, pixelsPerSecond) {
         previewNoteMidi(startMidi);
         return;
       }
-      if (latest.midi !== startMidi) previewNoteMidi(latest.midi);
       const next = events.slice();
       next[index] = latest;
       commit(next);
@@ -1396,6 +1409,15 @@ function bindChartTimelineInteractions(strip) {
 
   strip.addEventListener("contextmenu", (event) => {
     if (event.target.closest(".cc") || event.target.closest(".chart-line")) return;
+    // By position, not by element: the playhead is a full-height line lying
+    // over the note lanes, so a right-click on it reads as "not in a lane"
+    // however the elements are checked. The add-chord menu belongs to the
+    // chord row, and the chord row is a band of the strip.
+    const chordRow = strip.querySelector(".chart-chords");
+    if (chordRow) {
+      const bounds = chordRow.getBoundingClientRect();
+      if (event.clientY > bounds.bottom) return;
+    }
     event.preventDefault();
     const song = state.repertoire.find((entry) => entry.id === state.selectedSongId) || null;
     if (!song) return;

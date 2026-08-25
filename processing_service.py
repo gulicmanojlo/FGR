@@ -1567,6 +1567,98 @@ def merge_short_notes(
     return [item for item in merged if float(item["d"]) >= min(minimum, 0.05)]
 
 
+def correct_octaves_against_audio(
+    events: Sequence[Mapping[str, Any]],
+    path: Path | str,
+    config: PitchTrackConfig,
+    tolerance_semitones: float = 0.9,
+) -> tuple[list[dict[str, Any]], int]:
+    """Move a note to the octave the stem is heard in, not the one inferred.
+
+    Octave was being decided by agreement between two detectors, and both can
+    be wrong the same way: measured against the bass stem itself, 10% of the
+    notes were the right note in the wrong octave, and the written part covered
+    MIDI 28-43 where the recording plays 31-48 — the whole line sitting low and
+    squeezed. Pitch class survives that; playing the part against the record
+    does not, which is the one test that matters here.
+
+    So the audio decides. A note keeps its name and moves by whole octaves to
+    whichever one is nearest what was measured over its own span.
+    """
+
+    items = [dict(event) for event in events]
+    if not items:
+        return items, 0
+
+    try:
+        import librosa
+        import numpy as np
+    except ImportError:
+        return items, 0
+
+    try:
+        audio, rate = librosa.load(Path(path), sr=22050, mono=True)
+        f0, voiced, probability = librosa.pyin(
+            audio,
+            fmin=float(librosa.midi_to_hz(max(12, config.midi_min - 12))),
+            fmax=float(librosa.midi_to_hz(min(108, config.midi_max + 12))),
+            sr=rate,
+            frame_length=2048,
+            hop_length=256,
+        )
+    except Exception:
+        LOGGER.warning("Octave check could not read %s", path, exc_info=True)
+        return items, 0
+
+    times = librosa.times_like(f0, sr=rate, hop_length=256)
+    measured = np.full(f0.shape, np.nan)
+    usable = np.isfinite(f0) & (probability > 0.4)
+    if voiced is not None:
+        usable &= voiced
+    measured[usable] = 69.0 + 12.0 * np.log2(f0[usable] / 440.0)
+
+    # The range the recording actually plays, so a correction cannot land
+    # outside it. The measurement itself can be an octave out on a low string,
+    # and without this guard those few errors drag notes past both ends of the
+    # part — measured, 28-43 became 24-51 where the stem plays 31-48.
+    played = measured[np.isfinite(measured)]
+    if played.size > 32:
+        low = float(np.percentile(played, 2)) - 1.5
+        high = float(np.percentile(played, 98)) + 1.5
+    else:
+        low, high = float(config.midi_min), float(config.midi_max)
+
+    corrected = 0
+    for item in items:
+        start = float(item.get("t", 0.0))
+        duration = float(item.get("d", 0.0))
+        window = (times >= start + 0.02) & (times <= start + min(max(duration, 0.05), 0.35))
+        values = measured[window]
+        values = values[np.isfinite(values)]
+        if values.size < 3:
+            continue
+        heard = float(np.median(values))
+        written = int(item.get("midi", 0))
+        # Only whole octaves: anything else would be changing which note it is,
+        # and the note itself is what the detectors get right.
+        best = written
+        best_distance = abs(written - heard)
+        for shift in (-24, -12, 12, 24):
+            candidate = written + shift
+            if not config.midi_min - 12 <= candidate <= config.midi_max + 12:
+                continue
+            distance = abs(candidate - heard)
+            if not low <= candidate <= high:
+                continue
+            if distance + tolerance_semitones < best_distance:
+                best_distance = distance
+                best = candidate
+        if best != written:
+            item["midi"] = best
+            corrected += 1
+    return items, corrected
+
+
 def snap_octaves_to_reference(
     events: Sequence[Mapping[str, Any]],
     reference: Sequence[Mapping[str, Any]],
@@ -1753,6 +1845,9 @@ def extract_monophonic_note_track(
             if paired is not None and paired[0]:
                 combined = merge_short_notes(paired[0], config.min_note_seconds)
                 combined = snap_octaves_to_reference(combined, pyin_events, config)
+                combined, octave_fixes = correct_octaves_against_audio(combined, path, config)
+                if octave_fixes:
+                    LOGGER.info("Octave corrected against audio on %d %s notes", octave_fixes, config.name)
                 combined = collapse_whole_tone_flicker(combined)
                 if len(combined) >= len(pyin_events):
                     combined_duration = max((event["t"] + event["d"] for event in combined), default=0.0)
