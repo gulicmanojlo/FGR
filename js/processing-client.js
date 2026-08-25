@@ -1,5 +1,5 @@
-import { normalizeBeatGrid } from "./beat-grid.js?v=188";
-import { createPcmWavFile } from "./pcm-wav.js?v=188";
+import { normalizeBeatGrid } from "./beat-grid.js?v=189";
+import { createPcmWavFile } from "./pcm-wav.js?v=189";
 
 /**
  * Browser client for the FGR audio-processing service.
@@ -1240,6 +1240,22 @@ export class ProcessingClient {
     }
     const payload = await response.json();
     return Array.isArray(payload?.songs) ? payload.songs : [];
+  }
+
+  async saveNoteTracks(songId, noteTracks, options = {}) {
+    if (!this.configured) return null;
+    const id = cleanString(songId);
+    if (!id) return null;
+    const response = await fetch(resolveServiceUrl(`/v1/songs/${id}/note-tracks`, this.baseUrl), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ noteTracks }),
+      signal: options.signal
+    });
+    if (!response.ok) {
+      throw new ProcessingClientError(`Note tracks were not saved (${response.status}).`, { code: "note-save-failed" });
+    }
+    return await response.json();
   }
 
   async chordAccuracy(songId, options = {}) {

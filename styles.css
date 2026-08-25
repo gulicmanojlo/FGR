@@ -5777,3 +5777,23 @@ body:has(.workbench-v2) {
   font-size: 11px;
   padding: 0 2px;
 }
+
+
+/* A note you can take hold of. */
+.workbench-v2 .chart-line .chart-note {
+  cursor: grab;
+}
+
+.workbench-v2 .chart-line .chart-note:hover {
+  filter: brightness(1.35);
+}
+
+.workbench-v2 .chart-line .chart-note:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.workbench-v2 .chart-line {
+  /* Alt-click on empty track adds a note, so the lane itself is a target. */
+  pointer-events: auto;
+}

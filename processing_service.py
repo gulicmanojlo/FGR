@@ -2601,6 +2601,48 @@ class SongStore:
                 raise APIError(HTTPStatus.NOT_FOUND, "asset_not_found", "Requested audio asset is missing.")
             return copy.deepcopy(metadata), path
 
+    def save_note_tracks(
+        self,
+        song_id: str,
+        tracks: Mapping[str, Any],
+        *,
+        expected_revision: int | None = None,
+    ) -> dict[str, Any]:
+        """Store note tracks a person corrected, keeping the machine's own copy.
+
+        The first correction moves the machine's version aside into
+        ``aiCandidateNoteTracks``. That is what makes the correction worth
+        anything beyond this song: the two can be compared, and the difference
+        is a measurement of the transcriber rather than an opinion about it.
+        """
+
+        with self._lock:
+            record = self._load_unlocked(song_id)
+            current_revision = int(record.get("noteTrackRevision") or 0)
+            if expected_revision is not None and int(expected_revision) != current_revision:
+                raise APIError(
+                    HTTPStatus.CONFLICT,
+                    "note_track_revision_mismatch",
+                    "Note tracks changed elsewhere since this edit began.",
+                    details={"revision": current_revision},
+                )
+
+            normalized = normalize_note_tracks(tracks)
+            provenance = record.get("noteTrackProvenance") or {}
+            if provenance.get("origin") != "manual-edit":
+                record["aiCandidateNoteTracks"] = copy.deepcopy(record.get("noteTracks") or {})
+                record["aiCandidateNoteTracksGeneratedAt"] = utc_now()
+
+            record["noteTracks"] = normalized
+            record["noteTrackRevision"] = current_revision + 1
+            record["noteTrackProvenance"] = {"origin": "manual-edit", "updatedAt": utc_now()}
+            self._write_unlocked(song_id, record)
+            return {
+                "songId": song_id,
+                "noteTrackRevision": record["noteTrackRevision"],
+                "noteTracks": normalized,
+            }
+
     def save_chords(
         self,
         song_id: str,
@@ -3538,6 +3580,19 @@ class FGRRequestHandler(BaseHTTPRequestHandler):
 
     def _patch(self) -> None:
         segments, song_id = self._route_song()
+        if len(segments) == 4 and segments[3] == "note-tracks":
+            request = self._read_json()
+            raw_tracks = request.get("noteTracks") if isinstance(request, dict) else request
+            expected = request.get("expectedRevision") if isinstance(request, dict) else None
+            if not isinstance(raw_tracks, Mapping):
+                raise APIError(HTTPStatus.BAD_REQUEST, "invalid_note_tracks", "noteTracks must be an object.")
+            payload = self.app.store.save_note_tracks(
+                song_id,
+                raw_tracks,
+                expected_revision=int(expected) if isinstance(expected, (int, float)) else None,
+            )
+            self._send_json(HTTPStatus.OK, payload)
+            return
         if len(segments) != 4 or segments[3] != "chords":
             raise APIError(HTTPStatus.NOT_FOUND, "not_found", "Endpoint not found.")
         request = self._read_json()

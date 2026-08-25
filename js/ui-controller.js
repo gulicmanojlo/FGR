@@ -40,7 +40,7 @@ import {
   noteToMidi,
   pitchFromMidi,
   octaveFromMidi
-} from "./audio.js?v=188";
+} from "./audio.js?v=189";
 
 import {
   beginProcessingRun,
@@ -50,16 +50,16 @@ import {
   getNoteEventsStartingBetween,
   normalizeNoteTracks,
   reusableProcessingSource
-} from "./processing-client.js?v=188";
+} from "./processing-client.js?v=189";
 import {
   chordChartFingerprint,
   findActiveChordIndex
-} from "./chord-analysis.js?v=188";
+} from "./chord-analysis.js?v=189";
 import {
   computeTimelineFollowScroll,
   resolveChordInsertionTime,
   timelineTickSeconds
-} from "./practice-timing.js?v=188";
+} from "./practice-timing.js?v=189";
 import {
   applyVisualPreferences,
   DEFAULT_DARK_ACCENT,
@@ -69,31 +69,31 @@ import {
   normalizeHexColor,
   patchUiPreferences,
   readUiPreferences
-} from "./preferences.js?v=188";
-import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=188";
-import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=188";
-import { createPcmWavFile } from "./pcm-wav.js?v=188";
-import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=188";
-import { resolveMixerControls } from "./mixer-routing.js?v=188";
-import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=188";
-import { createScorePlayer } from "./score-player.js?v=188";
+} from "./preferences.js?v=189";
+import { extractEmbeddedArtwork, parseImportedAudioFilename } from "./mp3-metadata.js?v=189";
+import { buildWaveformPath, createWaveformPath } from "./waveform.js?v=189";
+import { createPcmWavFile } from "./pcm-wav.js?v=189";
+import { buildAnalysisProgressView, isProcessingActive, mergeProcessingProgress } from "./analysis-progress.js?v=189";
+import { resolveMixerControls } from "./mixer-routing.js?v=189";
+import { applyGridOverride, isDownbeatIndex, normalizeBeatGrid } from "./beat-grid.js?v=189";
+import { createScorePlayer } from "./score-player.js?v=189";
 import {
   deleteLocalPlaylist,
   fetchLocalPlaylists,
   loadLocalPlaylist,
   playlistSlug,
   saveLocalPlaylist
-} from "./playlists.js?v=188";
-import { renderHarmonyEvents } from "./voicing.js?v=188";
+} from "./playlists.js?v=189";
+import { renderHarmonyEvents } from "./voicing.js?v=189";
 import {
   AUDIO_IMPORT_ACCEPT,
   importedAudioBadge,
   validateImportedAudioFile
-} from "./audio-import.js?v=188";
+} from "./audio-import.js?v=189";
 import {
   createPcmTabRecorder,
   audioBufferSignalStats
-} from "./pcm-capture.js?v=188";
+} from "./pcm-capture.js?v=189";
 
 import { 
   handleKeyDown, 
@@ -131,10 +131,10 @@ import {
   parseChordName,
   getActiveHint,
   openTimelineChordPicker
-} from "./ui-tools.js?v=188";
-import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=188";
-import { computeMelodyFingering } from "./melody-fingering.js?v=188";
-import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=188";
+} from "./ui-tools.js?v=189";
+import { chordSegmentGeometry, editChordSegment, resolveChordEndTime, upsertChordAtTime } from "./chord-editor.js?v=189";
+import { computeMelodyFingering } from "./melody-fingering.js?v=189";
+import { detectMelodyPhrases, phraseIndexAtTime } from "./melody-phrases.js?v=189";
 
 // Cache DOM Elements
 const $ = (id) => document.getElementById(id);
@@ -6849,6 +6849,58 @@ async function checkBackendReachable() {
 }
 
 /**
+ * Undo for note editing, kept separate from the chord history.
+ *
+ * Correcting a melody and correcting a chart are different jobs done at
+ * different moments; a single undo stack across both would take back an edit
+ * the person was not looking at.
+ */
+const noteHistory = new Map();
+
+function noteHistoryKey(songId, trackName) {
+  return `${songId}::${trackName}`;
+}
+
+function pushNoteHistory(song, trackName) {
+  if (!song?.id) return;
+  const key = noteHistoryKey(song.id, trackName);
+  const entry = noteHistory.get(key) || { past: [], future: [] };
+  entry.past.push(JSON.stringify(song.noteTracks?.[trackName]?.events || []));
+  if (entry.past.length > CHORD_HISTORY_LIMIT) entry.past.shift();
+  entry.future.length = 0;
+  noteHistory.set(key, entry);
+}
+
+function applyNoteHistory(trackName, direction) {
+  const song = getSelectedSong();
+  if (!song?.id) return;
+  const key = noteHistoryKey(song.id, trackName);
+  const entry = noteHistory.get(key);
+  if (!entry) return;
+  const from = direction === "undo" ? entry.past : entry.future;
+  const to = direction === "undo" ? entry.future : entry.past;
+  if (!from.length) return;
+
+  to.push(JSON.stringify(song.noteTracks?.[trackName]?.events || []));
+  const restored = JSON.parse(from.pop());
+  const tracks = { ...(song.noteTracks || {}) };
+  tracks[trackName] = { ...(tracks[trackName] || {}), events: restored, status: "ready" };
+  song.noteTracks = tracks;
+  saveRepertoire();
+  invalidateNoteTrackTask(song.id);
+  processingClient?.saveNoteTracks?.(song.id, tracks).catch(() => {});
+  if (state.tool === "chart") renderTool();
+  updateNoteHistoryButtons();
+  setPipeStatus(direction === "undo" ? "Poništeno" : "Vraćeno");
+}
+
+function updateNoteHistoryButtons() {
+  // The note lanes share the timeline's undo buttons; they act on whichever
+  // lane was last edited, which is the one the hand is on.
+  updateChordHistoryButtons();
+}
+
+/**
  * Undo for chord editing.
  *
  * Correcting a chart by ear is guesswork made of small experiments: split
@@ -7063,6 +7115,51 @@ window.FGRBridge = {
     return getHeroDuration();
   },
   /** Beat times of the selected song, so an edit can land on one. */
+  /**
+   * Replace one note track with a corrected one.
+   *
+   * The same reason the chord chart is editable: the machine is wrong often
+   * enough that a player has to be able to fix what they hear, and a fix is
+   * worth more than the song it was made on, because it can be compared with
+   * what the machine produced.
+   */
+  setNoteEventsForSelected(trackName, events) {
+    const song = getSelectedSong();
+    if (!song || !Array.isArray(events)) return false;
+    const name = String(trackName || "").trim();
+    if (!name) return false;
+
+    pushNoteHistory(song, name);
+    const tracks = { ...(song.noteTracks || {}) };
+    const existing = tracks[name] || { role: name === "bass" ? "bass" : "lead", status: "ready" };
+    tracks[name] = {
+      ...existing,
+      status: "ready",
+      events: events
+        .map((event) => ({
+          t: Math.max(0, Math.round((Number(event?.t) || 0) * 1000) / 1000),
+          d: Math.max(0.03, Math.round((Number(event?.d) || 0.2) * 1000) / 1000),
+          midi: Math.round(Number(event?.midi) || 0),
+          vel: Number.isFinite(Number(event?.vel)) ? Number(event.vel) : 0.8,
+          confidence: Number.isFinite(Number(event?.confidence)) ? Number(event.confidence) : 1
+        }))
+        .filter((event) => event.midi > 0)
+        .sort((first, second) => first.t - second.t)
+    };
+    song.noteTracks = tracks;
+    saveRepertoire();
+    invalidateNoteTrackTask(song.id);
+    processingClient?.saveNoteTracks?.(song.id, tracks).catch(() => {
+      setPipeStatus("Note nisu sačuvane na servisu — proveri da li radi.");
+    });
+    updateNoteHistoryButtons();
+    return true;
+  },
+  getNoteEventsForSelected(trackName) {
+    const song = getSelectedSong();
+    const track = song?.noteTracks?.[String(trackName || "")];
+    return Array.isArray(track?.events) ? track.events.map((event) => ({ ...event })) : [];
+  },
   getBeatTimes() {
     const beatGrid = songBeatGrid(getSelectedSong());
     return Array.isArray(beatGrid?.beats) ? beatGrid.beats : [];

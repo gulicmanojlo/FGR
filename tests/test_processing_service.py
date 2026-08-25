@@ -925,6 +925,59 @@ class BeatGridNormalizationTests(unittest.TestCase):
         self.assertEqual(result["qa"]["meterCandidates"], [{"beatsPerBar": 4, "phase": 1, "ratio": 1.8}])
 
 
+class NoteTrackSavingTests(unittest.TestCase):
+    """Notes corrected by ear have to survive, and keep the machine's copy.
+
+    A correction is the only reference this project has for what the
+    transcriber should have produced. Overwriting the machine's version with it
+    would destroy the comparison that makes the correction useful beyond the
+    song it was made on.
+    """
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.store = SongStore(Path(self.directory.name))
+        record = self.store._new_record("pesma")
+        record["noteTracks"] = {
+            "bass": {"role": "bass", "status": "ready", "events": [{"t": 1.0, "d": 0.5, "midi": 40}]}
+        }
+        self.store._write_unlocked("pesma", record)
+
+    def test_a_correction_is_stored_and_the_machine_copy_kept(self):
+        corrected = {
+            "bass": {"role": "bass", "status": "ready", "events": [
+                {"t": 1.0, "d": 0.5, "midi": 43},
+                {"t": 2.0, "d": 0.5, "midi": 45},
+            ]}
+        }
+        result = self.store.save_note_tracks("pesma", corrected)
+        self.assertEqual(result["noteTrackRevision"], 1)
+
+        record = self.store.read("pesma")
+        self.assertEqual(len(record["noteTracks"]["bass"]["events"]), 2)
+        self.assertEqual(record["noteTracks"]["bass"]["events"][0]["midi"], 43)
+        self.assertEqual(record["noteTrackProvenance"]["origin"], "manual-edit")
+        # The machine's own attempt is still there to be scored against.
+        self.assertEqual(record["aiCandidateNoteTracks"]["bass"]["events"][0]["midi"], 40)
+
+    def test_a_second_correction_does_not_overwrite_the_machine_copy(self):
+        self.store.save_note_tracks("pesma", {"bass": {"events": [{"t": 1.0, "d": 0.5, "midi": 43}]}})
+        self.store.save_note_tracks("pesma", {"bass": {"events": [{"t": 1.0, "d": 0.5, "midi": 44}]}})
+        record = self.store.read("pesma")
+        self.assertEqual(record["aiCandidateNoteTracks"]["bass"]["events"][0]["midi"], 40)
+        self.assertEqual(record["noteTrackRevision"], 2)
+
+    def test_an_edit_from_a_stale_view_is_refused(self):
+        self.store.save_note_tracks("pesma", {"bass": {"events": [{"t": 1.0, "d": 0.5, "midi": 43}]}})
+        with self.assertRaises(APIError):
+            self.store.save_note_tracks(
+                "pesma",
+                {"bass": {"events": [{"t": 1.0, "d": 0.5, "midi": 47}]}},
+                expected_revision=0,
+            )
+
+
 class NoteTranscriptionTests(unittest.TestCase):
     def test_both_detectors_run_for_bass_and_the_pair_is_preferred(self):
         """The bass is transcribed by one detector and placed by the other.

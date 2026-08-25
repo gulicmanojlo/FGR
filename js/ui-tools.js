@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=188";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=189";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=188";
+} from "./practice-timing.js?v=189";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=188";
+} from "./chord-editor.js?v=189";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -112,12 +112,171 @@ export function selectedOctave() {
   return state.baseOctave;
 }
 
+/**
+ * Editing on a note lane: hear it, move it, retune it, remove it, add one.
+ *
+ * A transcriber gets a melody roughly right and specifically wrong, and the
+ * player is the only one who can hear which is which. Until now they could fix
+ * a chord but not a note, which meant the melody had no way of ever becoming
+ * correct — and no reference existed to measure the transcriber against.
+ *
+ * The gestures are the ones an editor already teaches: click to hear, drag
+ * sideways to move in time, drag up and down to change the pitch by semitones,
+ * right-click to delete, Alt-click on empty track to add.
+ */
+function bindNoteLaneInteractions(lane, trackName, pixelsPerSecond) {
+  if (!lane || lane.dataset.bound === "1") return;
+  lane.dataset.bound = "1";
+
+  const commit = (events) => {
+    if (window.FGRBridge?.setNoteEventsForSelected(trackName, events)) {
+      const strip = document.getElementById("ccStrip");
+      const song = state.repertoire.find((entry) => entry.id === state.selectedSongId) || null;
+      renderNoteLane(lane, song, trackName, normalizeTimelineZoom(strip?.dataset.pixelsPerSecond));
+    }
+  };
+
+  const timeAt = (event) => {
+    const rect = lane.getBoundingClientRect();
+    const perSecond = normalizeTimelineZoom(lane.closest(".chart-timeline")?.dataset.pixelsPerSecond);
+    return Math.max(0, (event.clientX - rect.left) / perSecond);
+  };
+
+  lane.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const target = event.target.closest(".chart-note");
+
+    if (!target) {
+      // Alt on empty track adds a note at the pointer, pitched where the
+      // pointer is, so the gesture that places it also chooses it.
+      if (!event.altKey) return;
+      event.preventDefault();
+      const events = window.FGRBridge?.getNoteEventsForSelected(trackName) || [];
+      const pitches = events.map((item) => Number(item.midi)).filter(Number.isFinite);
+      const lowest = pitches.length ? Math.min(...pitches) : (trackName === "bass" ? 28 : 55);
+      const highest = pitches.length ? Math.max(...pitches) : (trackName === "bass" ? 52 : 84);
+      const rect = lane.getBoundingClientRect();
+      const ratio = 1 - Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height)));
+      const midi = Math.round(lowest + ratio * Math.max(1, highest - lowest));
+      const start = snapTimeToBeat(timeAt(event));
+      events.push({ t: start, d: 0.25, midi, vel: 0.8, confidence: 1 });
+      previewNoteMidi(midi);
+      commit(events);
+      return;
+    }
+
+    const index = Number(target.dataset.index);
+    const events = window.FGRBridge?.getNoteEventsForSelected(trackName) || [];
+    const original = events[index];
+    if (!original) return;
+
+    event.preventDefault();
+    lane.setPointerCapture(event.pointerId);
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startTime = Number(original.t);
+    const startMidi = Number(original.midi);
+    // A lane is a pitch range, not a piano: how many pixels a semitone is
+    // worth depends on how wide that range happens to be.
+    const pitches = events.map((item) => Number(item.midi)).filter(Number.isFinite);
+    const span = Math.max(1, Math.max(...pitches) - Math.min(...pitches));
+    const pixelsPerSemitone = Math.max(4, (lane.clientHeight - 28) / span);
+    let moved = false;
+    let latest = { ...original };
+
+    const onMove = (moveEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      if (!moved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+      moved = true;
+      const perSecond = normalizeTimelineZoom(lane.closest(".chart-timeline")?.dataset.pixelsPerSecond);
+      const time = Math.max(0, startTime + dx / perSecond);
+      const midi = Math.round(startMidi - dy / pixelsPerSemitone);
+      latest = {
+        ...original,
+        t: snapTimeToBeat(time),
+        midi: Math.min(108, Math.max(21, midi))
+      };
+      target.style.left = (latest.t * perSecond) + "px";
+      target.title = `${latest.midi}`;
+    };
+
+    const onUp = () => {
+      lane.removeEventListener("pointermove", onMove);
+      lane.removeEventListener("pointerup", onUp);
+      try { lane.releasePointerCapture(event.pointerId); } catch (_error) {}
+      if (!moved) {
+        // A plain click is a request to hear the note, not to change it.
+        previewNoteMidi(startMidi);
+        return;
+      }
+      if (latest.midi !== startMidi) previewNoteMidi(latest.midi);
+      const next = events.slice();
+      next[index] = latest;
+      commit(next);
+    };
+
+    lane.addEventListener("pointermove", onMove);
+    lane.addEventListener("pointerup", onUp);
+  });
+
+  lane.addEventListener("contextmenu", (event) => {
+    const target = event.target.closest(".chart-note");
+    if (!target) return;
+    event.preventDefault();
+    const index = Number(target.dataset.index);
+    const events = window.FGRBridge?.getNoteEventsForSelected(trackName) || [];
+    if (!events[index]) return;
+    events.splice(index, 1);
+    commit(events);
+  });
+
+  lane.addEventListener("keydown", (event) => {
+    const target = event.target.closest?.(".chart-note");
+    if (!target) return;
+    const index = Number(target.dataset.index);
+    const events = window.FGRBridge?.getNoteEventsForSelected(trackName) || [];
+    const note = events[index];
+    if (!note) return;
+    if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      events.splice(index, 1);
+      commit(events);
+      return;
+    }
+    // Arrows move a note by a semitone or a subdivision, which is the only way
+    // to be exact when a note is three pixels wide.
+    const step = event.shiftKey ? 12 : 1;
+    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      event.preventDefault();
+      const midi = note.midi + (event.key === "ArrowUp" ? step : -step);
+      events[index] = { ...note, midi: Math.min(108, Math.max(21, midi)) };
+      previewNoteMidi(events[index].midi);
+      commit(events);
+    }
+  });
+}
+
+/** Sound one note on the piano, so a lane can be checked by ear. */
+function previewNoteMidi(midi) {
+  const value = Math.round(Number(midi));
+  if (!Number.isFinite(value) || value < 21 || value > 108) return;
+  if (chordEditorPreviewTimer) window.clearTimeout(chordEditorPreviewTimer);
+  setAssistedMidiSet("chord-editor", new Set([value]), new Set([value]));
+  paintMidis([value], "", { autoClear: true, holdMs: 700 });
+  chordEditorPreviewTimer = window.setTimeout(() => {
+    chordEditorPreviewTimer = 0;
+    setAssistedMidiSet("chord-editor", new Set());
+  }, 700);
+}
+
 function renderNoteLane(lane, song, trackName, pixelsPerSecond) {
   if (!lane) return;
   var track = (song && song.noteTracks && song.noteTracks[trackName]) || null;
   var events = track && Array.isArray(track.events) ? track.events : [];
   if (!events.length) {
     lane.classList.add("is-empty");
+    bindNoteLaneInteractions(lane, trackName, pixelsPerSecond);
     return;
   }
   lane.classList.remove("is-empty");
@@ -142,7 +301,7 @@ function renderNoteLane(lane, song, trackName, pixelsPerSecond) {
   // into a row of pills — the shape of a melody is the first thing a player
   // reads, and it was the one thing not being shown.
   var laneHeight = Math.max(40, lane.clientHeight || 44);
-  var noteHeight = laneHeight >= 150 ? 13 : (laneHeight >= 90 ? 10 : 7);
+  var noteHeight = laneHeight >= 150 ? 16 : (laneHeight >= 90 ? 12 : 8);
   var usableHeight = Math.max(18, laneHeight - topPadding - noteHeight - 6);
 
   var fragment = document.createDocumentFragment();
@@ -163,6 +322,8 @@ function renderNoteLane(lane, song, trackName, pixelsPerSecond) {
     note.style.height = noteHeight + "px";
     note.dataset.t = String(startSeconds);
     note.dataset.midi = String(midi);
+    note.dataset.index = String(index);
+    note.tabIndex = 0;
     var name = names[((midi % 12) + 12) % 12];
     // Only label a note that has room for the label; the rest are read by
     // position, and by the piano at the bottom.
@@ -177,6 +338,7 @@ function renderNoteLane(lane, song, trackName, pixelsPerSecond) {
     fragment.appendChild(note);
   }
   lane.appendChild(fragment);
+  bindNoteLaneInteractions(lane, trackName, pixelsPerSecond);
 }
 
 function normalizePc(pc) {
