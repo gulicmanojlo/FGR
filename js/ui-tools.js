@@ -1,6 +1,6 @@
 import { state, NOTE_NAMES, readJsonStorage, writeJsonStorage } from "./state.js";
 import { connectMidi, setMidiOnChordCallback, midiPcSet, detectMidiChord } from "./midi.js";
-import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=187";
+import { noteToMidi, setAssistedMidiSet } from "./audio.js?v=188";
 import {
   buildCountInPattern,
   buildMetronomePattern,
@@ -11,7 +11,7 @@ import {
   timelineSecondsFromClientX,
   timelineTickSeconds,
   timelineZoomScrollLeft
-} from "./practice-timing.js?v=187";
+} from "./practice-timing.js?v=188";
 import {
   chordPreviewMidis,
   chordSegmentGeometry,
@@ -21,7 +21,7 @@ import {
   showChordContextMenu,
   showTimelineContextMenu,
   splitChordSegment
-} from "./chord-editor.js?v=187";
+} from "./chord-editor.js?v=188";
 
 const TIMELINE_ZOOM_STORAGE_KEY = "fgr-timeline-zoom-v1";
 const TRIAD = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6] };
@@ -142,7 +142,7 @@ function renderNoteLane(lane, song, trackName, pixelsPerSecond) {
   // into a row of pills — the shape of a melody is the first thing a player
   // reads, and it was the one thing not being shown.
   var laneHeight = Math.max(40, lane.clientHeight || 44);
-  var noteHeight = laneHeight >= 90 ? 9 : 7;
+  var noteHeight = laneHeight >= 150 ? 13 : (laneHeight >= 90 ? 10 : 7);
   var usableHeight = Math.max(18, laneHeight - topPadding - noteHeight - 6);
 
   var fragment = document.createDocumentFragment();
@@ -166,11 +166,11 @@ function renderNoteLane(lane, song, trackName, pixelsPerSecond) {
     var name = names[((midi % 12) + 12) % 12];
     // Only label a note that has room for the label; the rest are read by
     // position, and by the piano at the bottom.
-    if (width >= 20) {
+    if (width >= 14) {
       note.textContent = name;
       note.classList.add("has-name");
-      note.style.height = "12px";
-      note.style.lineHeight = "12px";
+      note.style.height = Math.max(14, noteHeight + 3) + "px";
+      note.style.lineHeight = Math.max(14, noteHeight + 3) + "px";
     }
     note.setAttribute("role", "listitem");
     note.title = name + Math.floor(midi / 12 - 1) + " · " + fmtChordTime(startSeconds);
@@ -873,6 +873,36 @@ function stripPlayheadTime(strip) {
  * by ear, 97% of his changes land on a whole beat. Snapping only inside half a
  * beat, so a deliberate off-beat placement further out is left alone.
  */
+const CHART_LANE_STORAGE_KEY = "fgr-chart-lanes-v1";
+
+function chartLaneVisible(lane) {
+  const saved = readJsonStorage(CHART_LANE_STORAGE_KEY, {});
+  return saved?.[lane] !== false;
+}
+
+function setChartLaneVisible(lane, visible) {
+  const saved = readJsonStorage(CHART_LANE_STORAGE_KEY, {});
+  writeJsonStorage(CHART_LANE_STORAGE_KEY, { ...saved, [lane]: Boolean(visible) });
+  const strip = document.getElementById("ccStrip");
+  const button = document.querySelector(`.chart-lane-switch[data-lane="${lane}"]`);
+  if (button) button.classList.toggle("is-on", Boolean(visible));
+  if (strip) {
+    applyChartLaneVisibility(strip);
+    // The remaining lane grows into the freed height, so its notes have to be
+    // laid out again against the new one.
+    const song = state.repertoire.find((entry) => entry.id === state.selectedSongId) || null;
+    const pixelsPerSecond = normalizeTimelineZoom(strip.dataset.pixelsPerSecond);
+    renderNoteLane(strip.querySelector(".chart-line-melody"), song, "melody", pixelsPerSecond);
+    renderNoteLane(strip.querySelector(".chart-line-bass"), song, "bass", pixelsPerSecond);
+  }
+}
+
+function applyChartLaneVisibility(strip) {
+  if (!strip) return;
+  strip.classList.toggle("hide-melody", !chartLaneVisible("melody"));
+  strip.classList.toggle("hide-bass", !chartLaneVisible("bass"));
+}
+
 function chartSnapEnabled() {
   return readJsonStorage("fgr-chart-snap-v1", { on: true })?.on !== false;
 }
@@ -1057,6 +1087,13 @@ function bindChartZoomControls(options) {
     const current = normalizeTimelineZoom(strip.dataset.pixelsPerSecond);
     applyZoom(stepTimelineZoom(current, event.deltaY < 0 ? 1 : -1), event.clientX);
   }, { passive: false });
+
+  shell.querySelectorAll(".chart-lane-switch").forEach((button) => {
+    const lane = button.dataset.lane;
+    button.classList.toggle("is-on", chartLaneVisible(lane));
+    button.addEventListener("click", () => setChartLaneVisible(lane, !chartLaneVisible(lane)));
+  });
+  applyChartLaneVisibility(strip);
 
   const snapButton = shell.querySelector("#chartSnapToggle");
   if (snapButton) {
@@ -1814,6 +1851,10 @@ export const TOOLS = {
             '<button type="button" data-chart-zoom="in" aria-label="Uvećaj timeline">+</button>' +
           '</div>' +
           '<small>Ctrl + točkić</small>' +
+          '<span class="chart-lane-switches" role="group" aria-label="Vidljivi kanali">' +
+            '<button type="button" class="chart-lane-switch" data-lane="melody" title="Prikaži ili sakrij melodiju">Melodija</button>' +
+            '<button type="button" class="chart-lane-switch" data-lane="bass" title="Prikaži ili sakrij bas">Bas</button>' +
+          '</span>' +
           '<button type="button" class="chart-snap-toggle" id="chartSnapToggle" title="Kada je uključeno, sečenje i pomeranje akorda padaju na dobu">⧉ Snap na dobe</button>' +
           '<button type="button" class="chart-focus-toggle" id="chartFocusToggle" title="Uvećaj chart preko celog ekrana (Esc za izlaz)">⛶ Ceo ekran</button>' +
         '</div>' +

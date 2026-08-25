@@ -227,7 +227,10 @@ export function computeTimelineFollowScroll(options = {}) {
   const scrollWidth = Math.max(viewportWidth, Number(options.scrollWidth) || viewportWidth);
   const current = clamp(Number(options.currentScrollLeft) || 0, 0, Math.max(0, scrollWidth - viewportWidth));
   const playheadPx = Math.max(0, Number(options.playheadPx) || 0);
-  const anchor = clamp(viewportWidth * (Number(options.anchorRatio) || 0.18), 76, 132);
+  // The upper bound has to scale with the window, or a wide screen keeps the
+  // playhead pinned near the left edge no matter what ratio is asked for.
+  const anchorRatio = Number(options.anchorRatio) || 0.18;
+  const anchor = clamp(viewportWidth * anchorRatio, 76, Math.max(132, viewportWidth * 0.62));
   const maximum = Math.max(0, scrollWidth - viewportWidth);
   const target = clamp(playheadPx - anchor, 0, maximum);
   const easing = clamp(Number(options.easing) || 0.32, 0.05, 1);

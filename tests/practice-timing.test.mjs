@@ -119,4 +119,30 @@ assert.equal(follow.anchorPx, 108);
 assert.equal(follow.targetScrollLeft, 892);
 assert.equal(follow.nextScrollLeft, 892);
 
+// The playhead is meant to sit in the middle of a wide window and stay there
+// while the chart slides underneath. A fixed upper clamp used to pin it near
+// the left edge however wide the screen was, which is exhausting to watch.
+const centred = computeTimelineFollowScroll({
+  playheadPx: 4000,
+  viewportWidth: 2400,
+  scrollWidth: 20000,
+  currentScrollLeft: 0,
+  anchorRatio: 0.5,
+  easing: 1
+});
+assert.equal(centred.anchorPx, 1200);
+assert.equal(centred.targetScrollLeft, 2800);
+
+// Before the middle is reached there is nothing to scroll: the playhead walks
+// out from the left edge on its own.
+const early = computeTimelineFollowScroll({
+  playheadPx: 300,
+  viewportWidth: 2400,
+  scrollWidth: 20000,
+  currentScrollLeft: 0,
+  anchorRatio: 0.5,
+  easing: 1
+});
+assert.equal(early.targetScrollLeft, 0);
+
 console.log("practice timing tests passed");

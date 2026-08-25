@@ -5730,3 +5730,50 @@ body:has(.workbench-v2) {
   margin-left: 0;
   margin-right: 0;
 }
+
+
+/* ---------------- PREKIDACI KANALA NA TRACI ---------------- */
+
+.workbench-v2 .chart-lane-switches {
+  display: inline-flex;
+  gap: 4px;
+  margin-right: 6px;
+}
+
+.workbench-v2 .chart-lane-switch {
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.workbench-v2 .chart-lane-switch.is-on {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--ink);
+}
+
+/* A hidden lane gives its height to the one that stays. */
+.workbench-v2 .chart-timeline.hide-melody .chart-line-melody,
+.workbench-v2 .chart-timeline.hide-bass .chart-line-bass {
+  display: none;
+}
+
+.workbench-v2 .chart-timeline.hide-melody .chart-line-bass,
+.workbench-v2 .chart-timeline.hide-bass .chart-line-melody {
+  top: 100px;
+  height: calc(100% - 108px);
+}
+
+.workbench-v2 .chart-timeline.hide-melody.hide-bass {
+  min-height: 120px;
+}
+
+/* The note name is the thing being read; give it room to be read. */
+.workbench-v2 .chart-line .chart-note.has-name {
+  font-size: 11px;
+  padding: 0 2px;
+}
